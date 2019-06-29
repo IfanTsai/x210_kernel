@@ -899,6 +899,9 @@ static int s3c24xx_i2c_probe(struct platform_device *pdev)
 	i2c->adap.nr = pdata->bus_num;
 
 	// 注册I2C适配器
+	// 调用i2c_register_adapter，再调用device_registe和i2c_scan_static_board_info
+	// device_registe表示注册主机的设备驱动
+	// i2c_scan_static_board_info调用i2c_new_device来创建了一个client，表示从机设备
 	ret = i2c_add_numbered_adapter(&i2c->adap);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "failed to add bus to i2c core\n");

@@ -2120,7 +2120,7 @@ static void __init smdkc110_machine_init(void)
 	android_pmem_set_platdata();
 #endif
 	/* i2c */
-	// 设置I2C平台数据
+	// 设置I2C平台数据         NULL表示设置默认的平台数据
 	s3c_i2c0_set_platdata(NULL);
 	s3c_i2c1_set_platdata(NULL);
 	s3c_i2c2_set_platdata(NULL);

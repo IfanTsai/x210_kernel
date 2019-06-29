@@ -724,6 +724,7 @@ static void i2c_scan_static_board_info(struct i2c_adapter *adapter)
 	struct i2c_devinfo	*devinfo;
 
 	down_read(&__i2c_board_lock);
+	// __i2c_board_list在调用i2c_register_board_info时链接起来的
 	list_for_each_entry(devinfo, &__i2c_board_list, list) {
 		if (devinfo->busnum == adapter->nr
 				&& !i2c_new_device(adapter,
@@ -794,6 +795,13 @@ static int i2c_register_adapter(struct i2c_adapter *adap)
 
 	/* Notify drivers */
 	mutex_lock(&core_lock);
+	// TODO:   以下为自底向上后又自顶向下的调用流程，
+	// TODO:   这一段还需结合源码以及core层分析来具体展开后方可blog输出
+	// 遍历I2C总线上已经注册的driver，
+	// 遍历到i2c-dev这个通用驱动后就会用其i2cdev_attach_adapter方法来挂接到在i2c-dev中注册的字符设备驱动，
+	// 并使用这个字符设备驱动的主设备号和adapter中的总线号（作为次设备号）来创建名为i2c-x的设备节点
+	// 应用层访问这个设备节点后即可调用在i2c-dev中注册的file_operations中的操作方法，
+	// 从操作方法源码知，最终读写调用的是adapter中的读写方法（即在本平台中为i2c-s3c2410.c中定义的方法）
 	dummy = bus_for_each_drv(&i2c_bus_type, NULL, adap,
 				 __process_new_adapter);
 	mutex_unlock(&core_lock);
@@ -865,6 +873,15 @@ EXPORT_SYMBOL(i2c_add_adapter);
  * and the appropriate driver model device nodes are created.  Otherwise, a
  * negative errno value is returned.
  */
+ /*
+ * 
+ * 在kernel中提供了两个adapter注册接口,分别为i2c_add_adapter和i2c_add_numbered_adapter
+ * 由于在系统中可能存在多个adapter, 所以将每一条I2C总线(控制器)对应一个编号，
+ * 这个总线号的PCI中的总线号不同.它和硬件无关,只是软件上便于区分而已.
+ * 对于i2c_add_adapter()而言, 它使用的是动态总线号, 即由系统给其分析一个总线号,
+ * 而i2c_add_numbered_adapter()则是自己指定总线号, 如果这个总线号非法或者是被占用, 就会注册失败.
+ *
+*/
 int i2c_add_numbered_adapter(struct i2c_adapter *adap)
 {
 	int	id;

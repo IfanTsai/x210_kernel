@@ -68,6 +68,7 @@ i2c_register_board_info(int busnum,
 	down_write(&__i2c_board_lock);
 
 	/* dynamic bus numbers will be assigned after the last static one */
+	// __i2c_first_dynamic_bus_num为全局未显式初始化变量，所以第一次进到这个函数，值为0
 	if (busnum >= __i2c_first_dynamic_bus_num)
 		__i2c_first_dynamic_bus_num = busnum + 1;
 
@@ -83,7 +84,7 @@ i2c_register_board_info(int busnum,
 
 		devinfo->busnum = busnum;
 		devinfo->board_info = *info;
-		list_add_tail(&devinfo->list, &__i2c_board_list);
+		list_add_tail(&devinfo->list, &__i2c_board_list);    // 将board_info用链表管理起来 
 	}
 
 	up_write(&__i2c_board_lock);
