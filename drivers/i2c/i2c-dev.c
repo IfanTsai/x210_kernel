@@ -575,16 +575,19 @@ static int __init i2c_dev_init(void)
 
 	printk(KERN_INFO "i2c /dev entries driver\n");
 
+	/* 将通用驱动注册为字符设备驱动，并提供file_operations 操作方法 */
 	res = register_chrdev(I2C_MAJOR, "i2c", &i2cdev_fops);
 	if (res)
 		goto out;
 
+	/* 创建类 */
 	i2c_dev_class = class_create(THIS_MODULE, "i2c-dev");
 	if (IS_ERR(i2c_dev_class)) {
 		res = PTR_ERR(i2c_dev_class);
 		goto out_unreg_chrdev;
 	}
 
+	/* 注册I2C从机设备驱动 */
 	res = i2c_add_driver(&i2cdev_driver);
 	if (res)
 		goto out_unreg_class;

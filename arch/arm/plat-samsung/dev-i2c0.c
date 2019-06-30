@@ -59,7 +59,7 @@ void __init s3c_i2c0_set_platdata(struct s3c2410_platform_i2c *pd)
 {
 	struct s3c2410_platform_i2c *npd;
 
-	if (!pd)
+	if (!pd)  // 参数为NULL则使用该函数上面定义的默认的平台数据
 		pd = &default_i2c_data0;
 
 	npd = kmemdup(pd, sizeof(struct s3c2410_platform_i2c), GFP_KERNEL);

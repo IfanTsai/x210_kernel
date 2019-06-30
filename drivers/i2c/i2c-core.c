@@ -878,7 +878,7 @@ EXPORT_SYMBOL(i2c_add_adapter);
  * 在kernel中提供了两个adapter注册接口,分别为i2c_add_adapter和i2c_add_numbered_adapter
  * 由于在系统中可能存在多个adapter, 所以将每一条I2C总线(控制器)对应一个编号，
  * 这个总线号的PCI中的总线号不同.它和硬件无关,只是软件上便于区分而已.
- * 对于i2c_add_adapter()而言, 它使用的是动态总线号, 即由系统给其分析一个总线号,
+ * 对于i2c_add_adapter()而言, 它使用的是动态总线号, 即由系统给其分配一个总线号,
  * 而i2c_add_numbered_adapter()则是自己指定总线号, 如果这个总线号非法或者是被占用, 就会注册失败.
  *
 */
