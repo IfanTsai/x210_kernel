@@ -117,10 +117,11 @@ static int misc_open(struct inode * inode, struct file * file)
 	const struct file_operations *old_fops, *new_fops = NULL;
 
 	mutex_lock(&misc_mtx);
-	
+
+	// 遍历链表来查找真正的fops
 	list_for_each_entry(c, &misc_list, list) {
 		if (c->minor == minor) {
-			new_fops = fops_get(c->fops);		
+			new_fops = fops_get(c->fops);	// 获取真正的fops
 			break;
 		}
 	}
@@ -142,7 +143,9 @@ static int misc_open(struct inode * inode, struct file * file)
 
 	err = 0;
 	old_fops = file->f_op;
+	// 替换真正的fops，之后再调用其他接口（write、ioctl、close）时调用的是真正的fops
 	file->f_op = new_fops;
+	// 调用真正的fops中的open方法
 	if (file->f_op->open) {
 		file->private_data = c;
 		err=file->f_op->open(inode,file);
@@ -208,6 +211,7 @@ int misc_register(struct miscdevice * misc)
 		set_bit(i, misc_minors);
 	}
 
+	// 生成设备号
 	dev = MKDEV(MISC_MAJOR, misc->minor);
 
 	// 注册设备
@@ -225,6 +229,7 @@ int misc_register(struct miscdevice * misc)
 	 * Add it to the front, so that later devices can "override"
 	 * earlier defaults
 	 */ 
+	// 将已注册的驱动添加到链表上，open时可遍历链表来替换真正的fops
 	list_add(&misc->list, &misc_list);
  out:
 	mutex_unlock(&misc_mtx);
@@ -278,13 +283,13 @@ static int __init misc_init(void)
 #ifdef CONFIG_PROC_FS
 	proc_create("misc", 0, NULL, &misc_proc_fops);
 #endif
-	misc_class = class_create(THIS_MODULE, "misc");
+	misc_class = class_create(THIS_MODULE, "misc");   // 创建misc类
 	err = PTR_ERR(misc_class);
 	if (IS_ERR(misc_class))
 		goto fail_remove;
 
 	err = -EIO;
-	if (register_chrdev(MISC_MAJOR,"misc",&misc_fops))
+	if (register_chrdev(MISC_MAJOR,"misc",&misc_fops))    // misc通过实现为字符设备驱动来注册
 		goto fail_printk;
 	misc_class->devnode = misc_devnode;
 	return 0;
