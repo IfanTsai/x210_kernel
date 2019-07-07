@@ -120,6 +120,7 @@ static struct gsl_ts_data devices[] = {
 	},
 };
 
+/* gslX680设备的抽象 */
 struct gsl_ts {
 	struct i2c_client *client;
 	struct input_dev *input;
@@ -839,13 +840,13 @@ static int gslX680_ts_init(struct i2c_client *client, struct gsl_ts *ts)
 	input_device->dev.parent = &client->dev;
 	input_set_drvdata(input_device, ts);
 
-	set_bit(EV_ABS, input_device->evbit);
-
 	set_bit(BTN_TOUCH, input_device->keybit);
 	set_bit(EV_ABS, input_device->evbit);
 	set_bit(EV_KEY, input_device->evbit);
+	/* 设置绝对坐标范围 */
 	input_set_abs_params(input_device, ABS_X, 0, SCREEN_MAX_X, 0, 0);
 	input_set_abs_params(input_device, ABS_Y, 0, SCREEN_MAX_Y, 0, 0);
+	/* 设置压力范围: 0 - 1, 1按下， 0未按下 */
 	input_set_abs_params(input_device, ABS_PRESSURE, 0, 1, 0, 0);
 #ifdef HAVE_TOUCH_KEY
 	input_device->evbit[0] = BIT_MASK(EV_KEY);
@@ -973,6 +974,7 @@ static int __devinit gsl_ts_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, ts);
 	ts->device_id = id->driver_data;
 
+	/* input子系统相关初始化 */
 	rc = gslX680_ts_init(client, ts);
 	if (rc < 0) {
 		dev_err(&client->dev, "GSLX680 init failed\n");
@@ -980,7 +982,8 @@ static int __devinit gsl_ts_probe(struct i2c_client *client,
 	}	
 
 	gsl_client = client;
-	
+
+	/* 触摸屏硬件初始化 */
 	gslX680_init();
 	init_chip(ts->client);
 	check_mem_data(ts->client);
