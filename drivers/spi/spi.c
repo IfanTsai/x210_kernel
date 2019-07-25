@@ -867,11 +867,11 @@ static int __init spi_init(void)
 		goto err0;
 	}
 
-	status = bus_register(&spi_bus_type);
+	status = bus_register(&spi_bus_type);     /* 注册SPI总线 */
 	if (status < 0)
 		goto err1;
 
-	status = class_register(&spi_master_class);
+	status = class_register(&spi_master_class);     /* 注册SPI类 */
 	if (status < 0)
 		goto err2;
 	return 0;

@@ -655,16 +655,19 @@ static int __init spidev_init(void)
 	 * the driver which manages those device numbers.
 	 */
 	BUILD_BUG_ON(N_SPI_MINORS > 256);
+	/* 注册为字符设备驱动，为应用层提供调用接口 */
 	status = register_chrdev(SPIDEV_MAJOR, "spi", &spidev_fops);
 	if (status < 0)
 		return status;
 
+	/* 创建spidev类 */
 	spidev_class = class_create(THIS_MODULE, "spidev");
 	if (IS_ERR(spidev_class)) {
 		unregister_chrdev(SPIDEV_MAJOR, spidev_spi_driver.driver.name);
 		return PTR_ERR(spidev_class);
 	}
 
+	/* 调用核心层提供的接口来注册设备驱动 */
 	status = spi_register_driver(&spidev_spi_driver);
 	if (status < 0) {
 		class_destroy(spidev_class);

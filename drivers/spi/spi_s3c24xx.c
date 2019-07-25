@@ -514,6 +514,7 @@ static int __init s3c24xx_spi_probe(struct platform_device *pdev)
 	struct resource *res;
 	int err = 0;
 
+	/* 实例化spi控制器 */
 	master = spi_alloc_master(&pdev->dev, sizeof(struct s3c24xx_spi));
 	if (master == NULL) {
 		dev_err(&pdev->dev, "No memory for spi_master\n");
@@ -521,9 +522,11 @@ static int __init s3c24xx_spi_probe(struct platform_device *pdev)
 		goto err_nomem;
 	}
 
+	/* 获取spi的私有数据结构体并初始化为空 */
 	hw = spi_master_get_devdata(master);
 	memset(hw, 0, sizeof(struct s3c24xx_spi));
 
+	/* 设置spi的私有数据*/
 	hw->master = spi_master_get(master);
 	hw->pdata = pdata = pdev->dev.platform_data;
 	hw->dev = &pdev->dev;
@@ -539,7 +542,7 @@ static int __init s3c24xx_spi_probe(struct platform_device *pdev)
 
 	/* initialise fiq handler */
 
-	s3c24xx_spi_initfiq(hw);
+	s3c24xx_spi_initfiq(hw);     /* 初始化s3c24xx_spi结构体中的handler，为其绑定中断处理函数 */
 
 	/* setup the master state. */
 
@@ -625,10 +628,11 @@ static int __init s3c24xx_spi_probe(struct platform_device *pdev)
 	} else
 		hw->set_cs = pdata->set_cs;
 
-	s3c24xx_spi_initialsetup(hw);
+	s3c24xx_spi_initialsetup(hw);  /* spi 控制器初始化 */
 
 	/* register our spi controller */
 
+	/* 内部最后spi_register_master来注册SPI控制器 */
 	err = spi_bitbang_start(&hw->bitbang);
 	if (err) {
 		dev_err(&pdev->dev, "Failed to register SPI master\n");
@@ -730,6 +734,7 @@ static struct platform_driver s3c24xx_spi_driver = {
 
 static int __init s3c24xx_spi_init(void)
 {
+		/* platform_driver_probe: 不支持热插拔的专用注册接口 */
         return platform_driver_probe(&s3c24xx_spi_driver, s3c24xx_spi_probe);
 }
 
