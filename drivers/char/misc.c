@@ -147,6 +147,8 @@ static int misc_open(struct inode * inode, struct file * file)
 	file->f_op = new_fops;
 	// 调用真正的fops中的open方法
 	if (file->f_op->open) {
+		// 将misc设备结构体放置到file的private_data中, 
+		// 所以采用misc框架写的驱动可以直接从file中获取misc结构体
 		file->private_data = c;
 		err=file->f_op->open(inode,file);
 		if (err) {

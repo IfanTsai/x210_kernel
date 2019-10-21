@@ -69,6 +69,7 @@ static void __rb_rotate_right(struct rb_node *node, struct rb_root *root)
 	rb_set_parent(node, left);
 }
 
+// 插入节点
 void rb_insert_color(struct rb_node *node, struct rb_root *root)
 {
 	struct rb_node *parent, *gparent;
@@ -215,6 +216,7 @@ static void __rb_erase_color(struct rb_node *node, struct rb_node *parent,
 		rb_set_black(node);
 }
 
+// 删除节点
 void rb_erase(struct rb_node *node, struct rb_root *root)
 {
 	struct rb_node *child, *parent;
@@ -380,6 +382,7 @@ struct rb_node *rb_last(const struct rb_root *root)
 }
 EXPORT_SYMBOL(rb_last);
 
+// 返回当前节点之后节点
 struct rb_node *rb_next(const struct rb_node *node)
 {
 	struct rb_node *parent;
@@ -409,6 +412,7 @@ struct rb_node *rb_next(const struct rb_node *node)
 }
 EXPORT_SYMBOL(rb_next);
 
+// 返回当前节点之前节点
 struct rb_node *rb_prev(const struct rb_node *node)
 {
 	struct rb_node *parent;

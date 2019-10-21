@@ -632,7 +632,7 @@ static int __init s3c24xx_spi_probe(struct platform_device *pdev)
 
 	/* register our spi controller */
 
-	/* 内部最后spi_register_master来注册SPI控制器 */
+	/* 内部最后调用spi_register_master来注册SPI控制器 */
 	err = spi_bitbang_start(&hw->bitbang);
 	if (err) {
 		dev_err(&pdev->dev, "Failed to register SPI master\n");

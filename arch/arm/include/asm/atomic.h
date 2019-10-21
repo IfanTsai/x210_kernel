@@ -24,7 +24,9 @@
  * strex/ldrex monitor on some implementations. The reason we can use it for
  * atomic_set() is the clrex or dummy strex done on every exception return.
  */
+// 读原子变量的数值
 #define atomic_read(v)	(*(volatile int *)&(v)->counter)
+// 设置原子变量数值
 #define atomic_set(v,i)	(((v)->counter) = (i))
 
 #if __LINUX_ARM_ARCH__ >= 6
@@ -32,8 +34,9 @@
 /*
  * ARMv6 UP and SMP safe atomic ops.  We use load exclusive and
  * store exclusive to ensure that these are atomic.  We may loop
- * to ensure that the update happens.
+ * to ensure that the update happens.                              
  */
+// 加一个整数到原子变量
 static inline void atomic_add(int i, atomic_t *v)
 {
 	unsigned long tmp;
@@ -72,6 +75,7 @@ static inline int atomic_add_return(int i, atomic_t *v)
 	return result;
 }
 
+// 从原子变量减一个整数
 static inline void atomic_sub(int i, atomic_t *v)
 {
 	unsigned long tmp;

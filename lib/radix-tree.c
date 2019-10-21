@@ -290,6 +290,7 @@ out:
  *
  *	Insert an item into the radix tree at position @index.
  */
+ // 插入节点
 int radix_tree_insert(struct radix_tree_root *root,
 			unsigned long index, void *item)
 {
@@ -425,6 +426,7 @@ EXPORT_SYMBOL(radix_tree_lookup_slot);
  *	them safely). No RCU barriers are required to access or modify the
  *	returned item, however.
  */
+ // 查找节点
 void *radix_tree_lookup(struct radix_tree_root *root, unsigned long index)
 {
 	return radix_tree_lookup_element(root, index, 0);
@@ -1101,6 +1103,7 @@ static inline void radix_tree_shrink(struct radix_tree_root *root)
  *
  *	Returns the address of the deleted item, or NULL if it was not present.
  */
+ // 删除节点
 void *radix_tree_delete(struct radix_tree_root *root, unsigned long index)
 {
 	/*

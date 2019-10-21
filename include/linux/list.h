@@ -20,9 +20,9 @@ struct list_head {
 	struct list_head *next, *prev;
 };
 
-// 静态初始化
 #define LIST_HEAD_INIT(name) { &(name), &(name) }
 
+// 静态初始化
 #define LIST_HEAD(name) \
 	struct list_head name = LIST_HEAD_INIT(name)
 
@@ -402,6 +402,7 @@ static inline void list_splice_tail_init(struct list_head *list,
  * @n:		another &struct list_head to use as temporary storage
  * @head:	the head for your list.
  */
+// 可安全删除的遍历
 #define list_for_each_safe(pos, n, head) \
 	for (pos = (head)->next, n = pos->next; pos != (head); \
 		pos = n, n = pos->next)
@@ -423,6 +424,7 @@ static inline void list_splice_tail_init(struct list_head *list,
  * @head:	the head for your list.
  * @member:	the name of the list_struct within the struct.
  */
+// list_for_each和list_entry的结合
 #define list_for_each_entry(pos, head, member)				\
 	for (pos = list_entry((head)->next, typeof(*pos), member);	\
 	     prefetch(pos->member.next), &pos->member != (head); 	\
