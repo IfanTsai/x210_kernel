@@ -724,20 +724,25 @@ static inline int mapping_writably_mapped(struct address_space *mapping)
 struct posix_acl;
 #define ACL_NOT_CACHED ((void *)(-1))
 
+/*
+ * 当创建一个新的inode时, i_list要链接到inode_in_use链表, 表示该inode处于使用状态,
+ * 同时i_sb_list要链接到s_inodes链表. 由于一个文件可以对应多个dentry(考虑文件的链接),
+ * 所有还需要将这些dentry链接到i_dentry链表头上.
+ */
 struct inode {
 	struct hlist_node	i_hash;
-	struct list_head	i_list;		/* backing dev IO list */
-	struct list_head	i_sb_list;
-	struct list_head	i_dentry;
-	unsigned long		i_ino;
-	atomic_t		i_count;
+	struct list_head	i_list;		/* backing dev IO list */ /* 用于描述inode当前状态的链表 */
+	struct list_head	i_sb_list; /* 同于链接到超级块中的inode链表 */
+	struct list_head	i_dentry;   /* 使用该inode的dentry链表 */
+	unsigned long		i_ino;      /* inode编号 */
+	atomic_t		    i_count;    /* inode引用计数 */
 	unsigned int		i_nlink;
 	uid_t			i_uid;
 	gid_t			i_gid;
 	dev_t			i_rdev;
 	unsigned int		i_blkbits;
 	u64			i_version;
-	loff_t			i_size;
+	loff_t			i_size;  /* 以字节为单位的文件大小 */
 #ifdef __NEED_I_SIZE_ORDERED
 	seqcount_t		i_size_seqcount;
 #endif
@@ -923,16 +928,16 @@ struct file {
 		struct rcu_head 	fu_rcuhead;
 	} f_u;
 	struct path		f_path;
-#define f_dentry	f_path.dentry
+#define f_dentry	f_path.dentry  /* 该文件对应的dentry */
 #define f_vfsmnt	f_path.mnt
 	const struct file_operations	*f_op;
-	spinlock_t		f_lock;  /* f_ep_links, f_flags, no IRQ */
+	spinlock_t		    f_lock;  /* f_ep_links, f_flags, no IRQ */
 	atomic_long_t		f_count;
 	unsigned int 		f_flags;
-	fmode_t			f_mode;
-	loff_t			f_pos;
+	fmode_t			    f_mode;
+	loff_t			    f_pos;  /* 当前进程的文件读写位置 */
 	struct fown_struct	f_owner;
-	const struct cred	*f_cred;
+	const struct cred  *f_cred;
 	struct file_ra_state	f_ra;
 
 	u64			f_version;
@@ -1320,23 +1325,23 @@ extern spinlock_t sb_lock;
 
 struct super_block {
 	struct list_head	s_list;		/* Keep this first */
-	dev_t			s_dev;		/* search index; _not_ kdev_t */
-	unsigned char		s_dirt;
-	unsigned char		s_blocksize_bits;
-	unsigned long		s_blocksize;
-	loff_t			s_maxbytes;	/* Max file size */
-	struct file_system_type	*s_type;
-	const struct super_operations	*s_op;
+	dev_t			    s_dev;		/* search index; _not_ kdev_t */
+	unsigned char		s_dirt;     /* 修改(脏)标志 */
+	unsigned char		s_blocksize_bits; /* 以位为单位的块大小 */
+	unsigned long		s_blocksize;        /* 以字节为单位的块大小 */
+	loff_t			    s_maxbytes;	  /* Max file size */
+	struct file_system_type         *s_type; /* 文件系统类型       */
+	const struct super_operations	*s_op;    /* 超级块操作方法 */
 	const struct dquot_operations	*dq_op;
-	const struct quotactl_ops	*s_qcop;
-	const struct export_operations *s_export_op;
+	const struct quotactl_ops	    *s_qcop;
+	const struct export_operations  *s_export_op;
 	unsigned long		s_flags;
-	unsigned long		s_magic;
-	struct dentry		*s_root;
+	unsigned long		s_magic;   /* 每个文件系统都有一个唯一的魔数 */
+	struct dentry	   *s_root;    /* 文件系统根目录的目录项指针 */
 	struct rw_semaphore	s_umount;
 	struct mutex		s_lock;
-	int			s_count;
-	atomic_t		s_active;
+	int			        s_count;
+	atomic_t		    s_active;
 #ifdef CONFIG_SECURITY
 	void                    *s_security;
 #endif

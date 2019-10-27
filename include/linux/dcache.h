@@ -86,30 +86,33 @@ full_name_hash(const unsigned char *name, unsigned int len)
 #define DNAME_INLINE_LEN_MIN 40 /* 128 bytes */
 #endif
 
+/*
+ * 目录项
+ */
 struct dentry {
-	atomic_t d_count;
+	atomic_t     d_count;
 	unsigned int d_flags;		/* protected by d_lock */
-	spinlock_t d_lock;		/* per dentry lock */
-	int d_mounted;
+	spinlock_t   d_lock;		/* per dentry lock */
+	int          d_mounted;     /* 记录安装在该目录下的文件系统数量 */
 	struct inode *d_inode;		/* Where the name belongs to - NULL is
-					 * negative */
+					 * negative */  /* 与文件名关联的索引节点 */
 	/*
 	 * The next three fields are touched by __d_lookup.  Place them here
 	 * so they all fit in a cache line.
 	 */
-	struct hlist_node d_hash;	/* lookup hash list */
-	struct dentry *d_parent;	/* parent directory */
-	struct qstr d_name;
+	struct hlist_node d_hash;	 /* lookup hash list */
+	struct dentry    *d_parent;	 /* parent directory */ /* 父目录项指针 */
+	struct qstr       d_name;    /* 文件名 */ 
 
 	struct list_head d_lru;		/* LRU list */
 	/*
 	 * d_child and d_rcu can share memory
 	 */
 	union {
-		struct list_head d_child;	/* child of parent list */
+		struct list_head d_child;	/* child of parent list */ /* 该目录下所有子目录项链表 */
 	 	struct rcu_head d_rcu;
 	} d_u;
-	struct list_head d_subdirs;	/* our children */
+	struct list_head d_subdirs;	/* our children */   /* 子目录项链表头, 通过该结构组成目录树 */
 	struct list_head d_alias;	/* inode alias list */
 	unsigned long d_time;		/* used by d_revalidate */
 	const struct dentry_operations *d_op;
