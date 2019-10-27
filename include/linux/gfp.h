@@ -307,6 +307,11 @@ alloc_pages(gfp_t gfp_mask, unsigned int order)
 extern struct page *alloc_page_vma(gfp_t gfp_mask,
 			struct vm_area_struct *vma, unsigned long addr);
 #else
+/*
+ * gfp_mask: 申请标志, 常用GFP_KERNEL
+ * order:    申请连续页面的大小, 申请2^order个页面
+ * 返回值:      返回的是申请到的页面结构的指针, 通过调用page_address转为内存地址
+ */
 #define alloc_pages(gfp_mask, order) \
 		alloc_pages_node(numa_node_id(), gfp_mask, order)
 #define alloc_page_vma(gfp_mask, vma, addr) alloc_pages(gfp_mask, 0)

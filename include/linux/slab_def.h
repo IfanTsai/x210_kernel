@@ -149,6 +149,10 @@ static inline size_t slab_buffer_size(struct kmem_cache *cachep)
 }
 #endif
 
+/*
+ * kmalloc实质是基于对象管理内存的slab系统, 
+ * 内核事先已经创建了不同尺寸的的对象, 将其封装为kmalloc
+ */
 static __always_inline void *kmalloc(size_t size, gfp_t flags)
 {
 	struct kmem_cache *cachep;
