@@ -88,6 +88,7 @@ full_name_hash(const unsigned char *name, unsigned int len)
 
 /*
  * 目录项
+ * 通过将dentry对象的d_child成员链接到父dentry对象的d_subdirs成员来组织成树形结构
  */
 struct dentry {
 	atomic_t     d_count;
@@ -109,10 +110,10 @@ struct dentry {
 	 * d_child and d_rcu can share memory
 	 */
 	union {
-		struct list_head d_child;	/* child of parent list */ /* 该目录下所有子目录项链表 */
+		struct list_head d_child;	/* child of parent list */ /* 父目录下所有子目录项链表 */
 	 	struct rcu_head d_rcu;
 	} d_u;
-	struct list_head d_subdirs;	/* our children */   /* 子目录项链表头, 通过该结构组成目录树 */
+	struct list_head d_subdirs;	/* our children */   /* 子目录项链表头 */
 	struct list_head d_alias;	/* inode alias list */
 	unsigned long d_time;		/* used by d_revalidate */
 	const struct dentry_operations *d_op;

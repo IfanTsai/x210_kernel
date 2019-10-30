@@ -732,7 +732,7 @@ struct posix_acl;
 struct inode {
 	struct hlist_node	i_hash;
 	struct list_head	i_list;		/* backing dev IO list */ /* 用于描述inode当前状态的链表 */
-	struct list_head	i_sb_list; /* 同于链接到超级块中的inode链表 */
+	struct list_head	i_sb_list; /* 用于链接到超级块中的inode链表 */
 	struct list_head	i_dentry;   /* 使用该inode的dentry链表 */
 	unsigned long		i_ino;      /* inode编号 */
 	atomic_t		    i_count;    /* inode引用计数 */
@@ -1739,14 +1739,27 @@ static inline void file_accessed(struct file *file)
 
 int sync_inode(struct inode *inode, struct writeback_control *wbc);
 
+/*
+ * file_system_type是表示要向內核VFS注册的文件系统的抽象结构,
+ * 内核中有个该结构类型的全局变量file_systems来维护所有已经注册到内核中的文件系统
+ */
 struct file_system_type {
-	const char *name;
-	int fs_flags;
+	const char *name;   /* 文件系统名字, 这个字符串唯一标识一种文件系统 */
+	int fs_flags;    /// ???
+	/* 跟具体文件系统有关, 返回super_block对象 */
 	int (*get_sb) (struct file_system_type *, int,
 		       const char *, void *, struct vfsmount *);
+	/* 卸载文件系统时, 释放清理 */
 	void (*kill_sb) (struct super_block *);
 	struct module *owner;
+	/* 内核中所有已注册的文件系统形成一个单链表, 链表头为file_systems */
 	struct file_system_type * next;
+	/*
+	 * 对于每一个被mount的文件系统, 内核都会为其分配一个super_block结构,
+	 * 由于同一种文件系统存在多个被挂载, 例如多个ext4硬盘挂载在不同目录下,
+	 * 所以一种文件系统类型就会对应多个super_block结构,
+	 * fs_supers链表就是把同一种文件系统类型对应的所有super_block链接起来
+	 */
 	struct list_head fs_supers;
 
 	struct lock_class_key s_lock_key;
