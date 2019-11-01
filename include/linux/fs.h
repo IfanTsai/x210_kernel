@@ -726,7 +726,7 @@ struct posix_acl;
 
 /*
  * 当创建一个新的inode时, i_list要链接到inode_in_use链表, 表示该inode处于使用状态,
- * 同时i_sb_list要链接到s_inodes链表. 由于一个文件可以对应多个dentry(考虑文件的链接),
+ * 同时i_sb_list要链接到超级块的s_inodes链表. 由于一个文件可以对应多个dentry(考虑文件的链接),
  * 所有还需要将这些dentry链接到i_dentry链表头上.
  */
 struct inode {
@@ -751,7 +751,7 @@ struct inode {
 	struct timespec		i_ctime;
 	blkcnt_t		i_blocks;
 	unsigned short          i_bytes;
-	umode_t			i_mode;
+	umode_t			i_mode; /* 用来区分各种文件类型 */
 	spinlock_t		i_lock;	/* i_blocks, i_bytes, maybe i_size */
 	struct mutex		i_mutex;
 	struct rw_semaphore	i_alloc_sem;
@@ -759,6 +759,10 @@ struct inode {
 	const struct file_operations	*i_fop;	/* former ->i_op->default_file_ops */
 	struct super_block	*i_sb;
 	struct file_lock	*i_flock;
+	/**
+	 * 文件内容缓存，对文件的读写先从缓存里获取内容.
+	 * 读取文件时先取缓存，写文件时先写到缓存中，等合适时机再从缓存写入硬盘
+	 */
 	struct address_space	*i_mapping;
 	struct address_space	i_data;
 #ifdef CONFIG_QUOTA
@@ -928,14 +932,14 @@ struct file {
 		struct rcu_head 	fu_rcuhead;
 	} f_u;
 	struct path		f_path;
-#define f_dentry	f_path.dentry  /* 该文件对应的dentry */
-#define f_vfsmnt	f_path.mnt
+#define f_dentry	f_path.dentry  /* 该文件对应的dentry对象 */
+#define f_vfsmnt	f_path.mnt     /* 该文件所属文件系统的vfsmount对象 */
 	const struct file_operations	*f_op;
 	spinlock_t		    f_lock;  /* f_ep_links, f_flags, no IRQ */
 	atomic_long_t		f_count;
 	unsigned int 		f_flags;
 	fmode_t			    f_mode;
-	loff_t			    f_pos;  /* 当前进程的文件读写位置 */
+	loff_t			    f_pos;     /* 当前进程的文件读写位置 */
 	struct fown_struct	f_owner;
 	const struct cred  *f_cred;
 	struct file_ra_state	f_ra;
@@ -1347,7 +1351,7 @@ struct super_block {
 #endif
 	const struct xattr_handler **s_xattr;
 
-	struct list_head	s_inodes;	/* all inodes */
+	struct list_head	s_inodes;	/* all inodes */ /* 该文件系统下所有inode形成的链表 */
 	struct hlist_head	s_anon;		/* anonymous dentries for (nfs) exporting */
 	struct list_head	s_files;
 	/* s_dentry_lru and s_nr_dentry_unused are protected by dcache_lock */

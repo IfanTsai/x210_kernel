@@ -88,7 +88,9 @@ full_name_hash(const unsigned char *name, unsigned int len)
 
 /*
  * 目录项
- * 通过将dentry对象的d_child成员链接到父dentry对象的d_subdirs成员来组织成树形结构
+ * 通过将dentry对象的d_child成员链接到父dentry对象的d_subdirs成员来组织成树形结构,
+ * 通过dentry树可以遍历整个文件系统的目录和文件，
+ * 为了加快dentry的查找，内核采用了hash表来缓存dentry，称之为dentry cache
  */
 struct dentry {
 	atomic_t     d_count;
@@ -101,7 +103,7 @@ struct dentry {
 	 * The next three fields are touched by __d_lookup.  Place them here
 	 * so they all fit in a cache line.
 	 */
-	struct hlist_node d_hash;	 /* lookup hash list */
+	struct hlist_node d_hash;	 /* lookup hash list */ /* 链接到dentry cache的hash链表 */
 	struct dentry    *d_parent;	 /* parent directory */ /* 父目录项指针 */
 	struct qstr       d_name;    /* 文件名 */ 
 
