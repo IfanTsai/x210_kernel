@@ -85,7 +85,7 @@ static netdev_tx_t loopback_xmit(struct sk_buff *skb,
 	lb_stats = this_cpu_ptr(pcpu_lstats);
 
 	len = skb->len;
-	if (likely(netif_rx(skb) == NET_RX_SUCCESS)) {
+	if (likely(netif_rx(skb) == NET_RX_SUCCESS)) { /* 直接将skb通过netif_rx发给网络协议栈 */
 		lb_stats->bytes += len;
 		lb_stats->packets++;
 	} else
@@ -193,7 +193,7 @@ static __net_init int loopback_net_init(struct net *net)
 	int err;
 
 	err = -ENOMEM;
-	dev = alloc_netdev(0, "lo", loopback_setup);
+	dev = alloc_netdev(0, "lo", loopback_setup); /* 申请struct net_device内存, 并执行loopback_setup */
 	if (!dev)
 		goto out;
 

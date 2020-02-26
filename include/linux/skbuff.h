@@ -404,14 +404,14 @@ struct sk_buff {
 
 	__u16			vlan_tci;
 
-	sk_buff_data_t		transport_header;
-	sk_buff_data_t		network_header;
-	sk_buff_data_t		mac_header;
+	sk_buff_data_t		transport_header;   /* 传输层协议头 */
+	sk_buff_data_t		network_header;     /* 网络层协议头 */
+	sk_buff_data_t		mac_header;         /* 以太网帧头 */
 	/* These elements must be at the end, see alloc_skb() for details.  */
-	sk_buff_data_t		tail;
-	sk_buff_data_t		end;
-	unsigned char		*head,
-				*data;
+	sk_buff_data_t		tail;   /* 有效数据包尾部 */
+	sk_buff_data_t		end;    /* 缓冲区尾部 */
+	unsigned char		*head,  /* 缓冲区头部 */
+				*data;          /* 有效数据包头部 */
 	unsigned int		truesize;
 	atomic_t		users;
 };

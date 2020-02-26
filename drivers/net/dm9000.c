@@ -195,6 +195,9 @@ dm9000_reset(board_info_t * db)
 	dev_dbg(db->dev, "resetting device\n");
 
 	/* RESET device */
+	/*
+	 * dm9000通过端口来操作寄存器, 先将寄存器的偏移值或命令码写入地址端口, 再将值写入数据端口
+	 */
 	writeb(DM9000_NCR, db->io_addr);
 	udelay(200);
 	writeb(NCR_RST, db->io_data);
@@ -888,11 +891,11 @@ dm9000_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	iow(db, DM9000_TXPLL, skb->len);
 	iow(db, DM9000_TXPLH, skb->len >> 8);
 
-	/* Move data to DM9000 TX RAM */
+	/* Move data to DM9000 TX RAM */   /* 将数据包放入 TX SRAM 中 */
 	writeb(DM9000_MWCMD, db->io_addr);
 	(db->outblk)(db->io_data, skb->data, skb->len);
 
-	/* Issue TX polling command */
+	/* Issue TX polling command */  /* 开始将 TX SRAM 中的数据发送出去, 发送完毕会通过中断告知 */
 	iow(db, DM9000_TCR, TCR_TXREQ);	/* Cleared after TX complete */
 	dev->trans_start = jiffies;
 
@@ -942,7 +945,7 @@ static void
 dm9000_rx(struct net_device *dev)
 {
 	board_info_t *db = netdev_priv(dev);
-	struct dm9000_rxhdr rxhdr;
+	struct dm9000_rxhdr rxhdr;   /* RX sram存储的数据的四字节头部, 去除头部后才是数据包 */
 	struct sk_buff *skb;
 	u8 rxbyte, *rdptr;
 	bool GoodPacket;
@@ -954,9 +957,9 @@ dm9000_rx(struct net_device *dev)
 		ior(db, DM9000_MRCMDX);	/* Dummy read */
 		save_mrr = (ior(db, 0xf5) << 8) | ior(db, 0xf4);
 		/* Get most updated data */
-		rxbyte = ior(db, DM9000_MRCMDX);
+		rxbyte = ior(db, DM9000_MRCMDX); /* 读取 RX sram 的数据, 地址不会自增 */
 		
-		if(rxbyte != DM9000_PKT_RDY)
+		if(rxbyte != DM9000_PKT_RDY)  /* RX sram存储的数据的四字节头部第一字节固定为0x01 */
 		{
 			/* Status check: this byte must be 0 or 1 */
 			if (rxbyte > DM9000_PKT_RDY) {
@@ -973,7 +976,7 @@ dm9000_rx(struct net_device *dev)
 
 		/* A packet ready now  & Get status/length */
 		GoodPacket = true;
-		writeb(DM9000_MRCMD, db->io_addr);
+		writeb(DM9000_MRCMD, db->io_addr);  /* 读取 RX sram 的数据, 并且地址自增 */
 		(db->inblk)(db->io_data, &rxhdr, sizeof(rxhdr));
 
 		RxLen = le16_to_cpu(rxhdr.RxLen);
@@ -990,6 +993,7 @@ dm9000_rx(struct net_device *dev)
 				rxhdr.RxStatus, RxLen);
 
 		/* Packet Status check */
+		/* 64 < 以太网帧长度 <= 1536 */
 		if (RxLen < 0x40) {
 			GoodPacket = false;
 			if (netif_msg_rx_err(db))
@@ -1085,21 +1089,21 @@ static irqreturn_t dm9000_interrupt(int irq, void *dev_id)
 	iow(db, DM9000_IMR, IMR_PAR);
 
 	/* Got DM9000 interrupt status */
-	int_status = ior(db, DM9000_ISR);	/* Got ISR */
+	int_status = ior(db, DM9000_ISR);	/* Got ISR */  /* 获取中断状态, 是接收中断还是发送中断 */
 	iow(db, DM9000_ISR, int_status);	/* Clear ISR status */
 
 	if (netif_msg_intr(db))
 		dev_dbg(db->dev, "interrupt status %02x\n", int_status);
 
 	/* Received the coming packet */
-	if (int_status & ISR_PRS)
+	if (int_status & ISR_PRS)   /* 接收中断 */
 		dm9000_rx(dev);
 
 	/* Got DM9000 interrupt status */
 	int_status |= ior(db, DM9000_ISR);	/* Got ISR */
 
 	/* Trnasmit Interrupt check */
-	if (int_status & ISR_PTS)
+	if (int_status & ISR_PTS)   /* 发送中断 */
 	{
 		iow(db, DM9000_ISR, ISR_PTS);	/* Clear ISR status */
 		dm9000_tx_done(dev, db);
@@ -1357,9 +1361,9 @@ dm9000_stop(struct net_device *ndev)
 }
 
 static const struct net_device_ops dm9000_netdev_ops = {
-	.ndo_open		= dm9000_open,
-	.ndo_stop		= dm9000_stop,
-	.ndo_start_xmit		= dm9000_start_xmit,
+	.ndo_open		= dm9000_open,              /* ifconfig eth0 up */
+	.ndo_stop		= dm9000_stop,              /* ifconfig eth0 down */
+	.ndo_start_xmit		= dm9000_start_xmit,    /* 网络协议栈调用start_xmit */
 	.ndo_tx_timeout		= dm9000_timeout,
 	.ndo_set_multicast_list	= dm9000_hash_table,
 	.ndo_do_ioctl		= dm9000_ioctl,
@@ -1405,12 +1409,23 @@ __setup("mac=", mac_setup);
 /*
  * Search DM9000 board, allocate space and register it
  */
+/*
+ * 1. 为struct board_info和struct net_device结构体申请内存
+ * 2. 从platform_device中获取dm9000资源: 地址端口、数据端口地址和中断号,
+ *    并为端口地址ioremap
+ * 3. 给board_info设置读写函数
+ * 4. 重启dm9000
+ * 5. 读取 vendor id 和 product id, 并验证是否是dm9000
+ * 6. 读取 chip revision, 并根据不同revision对db->type进行赋值
+ * 7. 初始化ndev: 赋值fops, 设置mac地址
+ * 8. 调用register_netdev注册网络驱动
+ */
 static int __devinit
 dm9000_probe(struct platform_device *pdev)
 {
 	struct dm9000_plat_data *pdata = pdev->dev.platform_data;
 	struct board_info *db;	/* Point a board information structure */
-	struct net_device *ndev;
+	struct net_device *ndev;   /* struct net_device为网络设备的抽象 */
 	const unsigned char *mac_src;
 	int ret = 0;
 	int iosize;
@@ -1418,7 +1433,7 @@ dm9000_probe(struct platform_device *pdev)
 	u32 id_val;
 
 	/* Init network device */
-	ndev = alloc_etherdev(sizeof(struct board_info));
+	ndev = alloc_etherdev(sizeof(struct board_info)); /* 同时为ndev和db申请内存 */
 	if (!ndev) {
 		dev_err(&pdev->dev, "could not allocate device.\n");
 		return -ENOMEM;
@@ -1439,8 +1454,8 @@ dm9000_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK(&db->phy_poll, dm9000_poll_work);
 
-	db->addr_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	db->data_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	db->addr_res = platform_get_resource(pdev, IORESOURCE_MEM, 0); /* dm9000地址端口 */
+	db->data_res = platform_get_resource(pdev, IORESOURCE_MEM, 1); /* dm9000数据端口 */
 	db->irq_res  = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
 
 	if (db->addr_res == NULL || db->data_res == NULL ||
@@ -1450,7 +1465,7 @@ dm9000_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-	db->irq_wake = platform_get_irq(pdev, 1);
+	db->irq_wake = platform_get_irq(pdev, 1); /* 只定义了一个中断, 所以返回-ENXIO*/
 	if (db->irq_wake >= 0) {
 		dev_dbg(db->dev, "wakeup irq %d\n", db->irq_wake);
 
@@ -1515,7 +1530,7 @@ dm9000_probe(struct platform_device *pdev)
 	ndev->irq	= db->irq_res->start;
 
 	/* ensure at least we have a default set of IO routines */
-	dm9000_set_io(db, iosize);
+	dm9000_set_io(db, iosize); /* 在下面if判断中还会设置一次, 所以这里设置无效 */
 
 	/* check to see if anything is being over-ridden */
 	if (pdata != NULL) {
@@ -1525,8 +1540,8 @@ dm9000_probe(struct platform_device *pdev)
 		if (pdata->flags & DM9000_PLATF_8BITONLY)
 			dm9000_set_io(db, 1);
 
-		if (pdata->flags & DM9000_PLATF_16BITONLY)
-			dm9000_set_io(db, 2);
+		if (pdata->flags & DM9000_PLATF_16BITONLY)  /* 只有这个if成立 */
+			dm9000_set_io(db, 2);  /* 设置board_info的读写函数 */
 
 		if (pdata->flags & DM9000_PLATF_32BITONLY)
 			dm9000_set_io(db, 4);
@@ -1554,12 +1569,12 @@ dm9000_probe(struct platform_device *pdev)
 
 	/* try multiple times, DM9000 sometimes gets the read wrong */
 	for (i = 0; i < 8; i++) {
-		id_val  = ior(db, DM9000_VIDL);
+		id_val  = ior(db, DM9000_VIDL);             /* 读取 vendor id */
 		id_val |= (u32)ior(db, DM9000_VIDH) << 8;
-		id_val |= (u32)ior(db, DM9000_PIDL) << 16;
+		id_val |= (u32)ior(db, DM9000_PIDL) << 16;  /* 读取 product id */
 		id_val |= (u32)ior(db, DM9000_PIDH) << 24;
 
-		if (id_val == DM9000_ID)
+		if (id_val == DM9000_ID)   /* 验证是否是dm9000 */
 			break;
 		dev_err(db->dev, "read wrong id 0x%08x\n", id_val);
 	}
@@ -1574,7 +1589,7 @@ dm9000_probe(struct platform_device *pdev)
 
 	/* I/O mode */
 	db->io_mode = ior(db, DM9000_ISR) >> 6;	/* ISR bit7:6 keeps I/O mode */	
-	id_val = ior(db, DM9000_CHIPR);
+	id_val = ior(db, DM9000_CHIPR);  /* 读取 chip revision */
 	dev_dbg(db->dev, "dm9000 revision 0x%02x  , io_mode %02x \n", id_val, db->io_mode);
 
 	switch (id_val) {
@@ -1610,6 +1625,7 @@ dm9000_probe(struct platform_device *pdev)
 	mac_src = "eeprom";
 
 	/* try reading the node address from the attached EEPROM */
+	/* platdata设置了DM9000_PLATF_NO_EEPROM flag, 所以这个读取无效 */
 	for (i = 0; i < 6; i += 2)
 		dm9000_read_eeprom(db, i / 2, ndev->dev_addr+i);
 
@@ -1617,7 +1633,7 @@ dm9000_probe(struct platform_device *pdev)
 		mac_src = "platform data";
 		//memcpy(ndev->dev_addr, pdata->dev_addr, 6);
 		/* mac from bootloader */
-		memcpy(ndev->dev_addr, mac, 6);
+		memcpy(ndev->dev_addr, mac, 6);  /* 这是真正的设置mac地址, 其他设置均无效 */
 	}
 
 	if (!is_valid_ether_addr(ndev->dev_addr)) {
