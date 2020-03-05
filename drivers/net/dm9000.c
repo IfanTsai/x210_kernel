@@ -881,7 +881,7 @@ dm9000_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	spin_lock_irqsave(&db->lock, flags);
 
-	netif_stop_queue(dev);
+	netif_stop_queue(dev);  /* 通知协议接口层停止向下递交数据包, 阻塞发送队列 */
 	
 	db->tx_pkt_cnt++;
 	dev->stats.tx_packets++;
@@ -927,7 +927,7 @@ static void dm9000_tx_done(struct net_device *dev, board_info_t *db)
 			/* One packet sent complete */
 			db->tx_pkt_cnt = 0;
 			dev->trans_start = 0;
-			netif_wake_queue(dev);
+			netif_wake_queue(dev);  /* 唤醒数据传输队列，协议接口层可以继续向下递交数据了 */
 		}
 	}
 }
@@ -1041,7 +1041,7 @@ dm9000_rx(struct net_device *dev)
 			/* Pass to upper layer */
 			skb->protocol = eth_type_trans(skb, dev);
 
-			netif_rx(skb);
+			netif_rx(skb);           /* 将sk_buffer向上递交给协议接口层 */
 			dev->stats.rx_packets++;
 			
 			check_mrr = (ior(db, 0xf5) << 8) | ior(db, 0xf4);
@@ -1206,7 +1206,7 @@ dm9000_open(struct net_device *dev)
 	db->dbug_cnt = 0;
 
 	mii_check_media(&db->mii, netif_msg_link(db), 1);
-	netif_start_queue(dev);
+	netif_start_queue(dev);   /* 激活设备发送队列 */
 	
 	dm9000_schedule_poll(db);
 
@@ -1349,8 +1349,8 @@ dm9000_stop(struct net_device *ndev)
 
 	cancel_delayed_work_sync(&db->phy_poll);
 
-	netif_stop_queue(ndev);
-	netif_carrier_off(ndev);
+	netif_stop_queue(ndev);   /* 停止设备发送队列 */
+	netif_carrier_off(ndev);  /* 断开网络连接 */
 
 	/* free interrupt */
 	free_irq(ndev->irq, ndev);
