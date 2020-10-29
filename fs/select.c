@@ -426,6 +426,7 @@ int do_select(int n, fd_set_bits *fds, struct timespec *end_time)
 		inp = fds->in; outp = fds->out; exp = fds->ex;
 		rinp = fds->res_in; routp = fds->res_out; rexp = fds->res_ex;
 
+		/* 遍历所有fd, 调用 fd 对应驱动 fops 的 poll 回调 */
 		for (i = 0; i < n; ++rinp, ++routp, ++rexp) {
 			unsigned long in, out, ex, all_bits, bit = 1, mask, j;
 			unsigned long res_in = 0, res_out = 0, res_ex = 0;
@@ -451,7 +452,7 @@ int do_select(int n, fd_set_bits *fds, struct timespec *end_time)
 					mask = DEFAULT_POLLMASK;
 					if (f_op && f_op->poll) {
 						wait_key_set(wait, in, out, bit);
-						mask = (*f_op->poll)(file, wait);
+						mask = (*f_op->poll)(file, wait);      // 调用具体驱动的 poll 回调
 					}
 					fput_light(file, fput_needed);
 					if ((mask & POLLIN_SET) && (in & bit)) {
@@ -546,7 +547,7 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 	 * since we used fdset we need to allocate memory in units of
 	 * long-words. 
 	 */
-	size = FDS_BYTES(n);
+	size = FDS_BYTES(n);    // n 个文件描述符需要多少字节的 bitmap 表示
 	bits = stack_fds;
 	if (size > sizeof(stack_fds) / 6) {
 		/* Not enough space in on-stack array; must use kmalloc */
@@ -555,21 +556,25 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 		if (!bits)
 			goto out_nofds;
 	}
-	fds.in      = bits;
-	fds.out     = bits +   size;
-	fds.ex      = bits + 2*size;
-	fds.res_in  = bits + 3*size;
-	fds.res_out = bits + 4*size;
-	fds.res_ex  = bits + 5*size;
+	/* 分配内存 */
+	fds.in      = bits;              // 关心可读事件的 fd 集合
+	fds.out     = bits +   size;     // 关心可写事件的 fd 集合
+	fds.ex      = bits + 2*size;     // 关心异常事件的 fd 集合
+	fds.res_in  = bits + 3*size;     // 输出结果，可读事件的 fd 集合
+	fds.res_out = bits + 4*size;     // 输出结果，是否事件的 fd 集合
+	fds.res_ex  = bits + 5*size;     // 输出结果，是否事件的 fd 集合
 
+	/* copy_from_user， 拷贝应用层的监听集合到内核空间 */
 	if ((ret = get_fd_set(n, inp, fds.in)) ||
 	    (ret = get_fd_set(n, outp, fds.out)) ||
 	    (ret = get_fd_set(n, exp, fds.ex)))
 		goto out;
+	/* 清空输出结果的 fd 集合 */
 	zero_fd_set(n, fds.res_in);
 	zero_fd_set(n, fds.res_out);
 	zero_fd_set(n, fds.res_ex);
 
+	/* 核心函数 */
 	ret = do_select(n, &fds, end_time);
 
 	if (ret < 0)
@@ -581,6 +586,7 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 		ret = 0;
 	}
 
+	/* copy_to_user, 将输出结果拷贝回应用层 */
 	if (set_fd_set(n, inp, fds.res_in) ||
 	    set_fd_set(n, outp, fds.res_out) ||
 	    set_fd_set(n, exp, fds.res_ex))
@@ -611,6 +617,7 @@ SYSCALL_DEFINE5(select, int, n, fd_set __user *, inp, fd_set __user *, outp,
 			return -EINVAL;
 	}
 
+	/* select 核心函数 */
 	ret = core_sys_select(n, inp, outp, exp, to);
 	ret = poll_select_copy_remaining(&end_time, tvp, 1, ret);
 

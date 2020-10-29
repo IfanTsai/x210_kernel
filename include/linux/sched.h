@@ -1318,8 +1318,10 @@ struct task_struct {
 #endif
 /* CPU-specific state of this task */
 	struct thread_struct thread;
+// Note: 描述该进程的文件系统信息
 /* filesystem information */
 	struct fs_struct *fs;
+// Note: 指向用户打开文件表
 /* open file information */
 	struct files_struct *files;
 /* namespaces */

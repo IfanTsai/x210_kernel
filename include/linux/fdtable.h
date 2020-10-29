@@ -44,8 +44,8 @@ struct files_struct {
   /*
    * read mostly part
    */
-	atomic_t count;
-	struct fdtable *fdt;
+	atomic_t count;         /* 共享该表的进程数量 */
+	struct fdtable *fdt;    /* 指向fd表 */
 	struct fdtable fdtab;
   /*
    * written part on a separate cache line in SMP
@@ -54,7 +54,7 @@ struct files_struct {
 	int next_fd;
 	struct embedded_fd_set close_on_exec_init;
 	struct embedded_fd_set open_fds_init;
-	struct file * fd_array[NR_OPEN_DEFAULT];
+	struct file * fd_array[NR_OPEN_DEFAULT]; /* fd表, struct fdtable中的fd二级指针指向该域 */
 };
 
 #define rcu_dereference_check_fdtable(files, fdtfd) \

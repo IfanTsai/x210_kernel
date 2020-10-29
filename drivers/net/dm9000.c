@@ -1465,7 +1465,7 @@ dm9000_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-	db->irq_wake = platform_get_irq(pdev, 1); /* 只定义了一个中断, 所以返回-ENXIO*/
+	db->irq_wake = platform_get_irq(pdev, 1); /* 只定义了一个中断, 所以返回-ENXIO */
 	if (db->irq_wake >= 0) {
 		dev_dbg(db->dev, "wakeup irq %d\n", db->irq_wake);
 
