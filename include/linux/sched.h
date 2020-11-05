@@ -1221,7 +1221,7 @@ struct task_struct {
 	struct list_head tasks;
 	struct plist_node pushable_tasks;
 
-	struct mm_struct *mm, *active_mm;
+	struct mm_struct *mm, *active_mm; // 内核使用 mm_struct 来描述一个进程的虚拟地址空间
 #if defined(SPLIT_RSS_COUNTING)
 	struct task_rss_stat	rss_stat;
 #endif
@@ -1240,8 +1240,8 @@ struct task_struct {
 	/* Revert to default priority/policy when forking */
 	unsigned sched_reset_on_fork:1;
 
-	pid_t pid;
-	pid_t tgid;
+	pid_t pid;    // 线程id，top -H 命令的线程视角 (在linux中，一个线程唯一对应一个task struct， 每个 task struct的 pid 唯一)
+	pid_t tgid;   // 线程组id，top命令的进程视角 (getpid 函数返回的是 tgid, gettid 函数才是返回的 pid)
 
 #ifdef CONFIG_CC_STACKPROTECTOR
 	/* Canary value for the -fstack-protector gcc feature */

@@ -197,7 +197,7 @@ do {									\
 	DEFINE_WAIT(__wait);						\
 									\
 	for (;;) {							\
-		/* 将节点加入到等待队列中 */
+		/* 将节点加入到等待队列中,         并设置当前进程状态不可打断 */
 		prepare_to_wait(&wq, &__wait, TASK_UNINTERRUPTIBLE);	\
 		/* 满足唤醒条件， 则退出循环 */
 		if (condition)						\

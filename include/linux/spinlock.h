@@ -273,6 +273,19 @@ static inline raw_spinlock_t *spinlock_check(spinlock_t *lock)
 	return &lock->rlock;
 }
 
+/*
+ * 使用场景：
+ * 1. 进程和进程之间： 信号量
+ * 2. 进程和其他内核代码： 自旋锁
+ * 3. 进程和中断代码： 自旋锁
+ *
+ ***************************************************************
+ * 自旋锁使用注意：
+ * 1. 不可以长期加锁，用于短期加锁
+ * 2. 会有系统开销（cpu 忙等），不可滥用
+ * 3. 在持有自旋锁的同时，不能持有信号量
+ * 4. 在持有自旋锁的同时，不能再二次持有它（会导致死锁）
+ */
 // 初始化信号量   spinlock_t lock = SPIN_LOCK_UNLOCKED; 或运行时初始化
 #define spin_lock_init(_lock)				\
 do {							\
@@ -286,6 +299,7 @@ static inline void spin_lock(spinlock_t *lock)
 	raw_spin_lock(&lock->rlock);
 }
 
+// 获得自旋锁之前禁止软中断，允许硬中断
 static inline void spin_lock_bh(spinlock_t *lock)
 {
 	raw_spin_lock_bh(&lock->rlock);
@@ -306,11 +320,13 @@ do {									\
 	raw_spin_lock_nest_lock(spinlock_check(lock), nest_lock);	\
 } while (0)
 
+// 获得自旋锁之前禁止本地cpu中断，但不保存中断状态
 static inline void spin_lock_irq(spinlock_t *lock)
 {
 	raw_spin_lock_irq(&lock->rlock);
 }
 
+// 获得自旋锁之前禁止本地cpu中断，之前的中断状态保存在 flags 中
 #define spin_lock_irqsave(lock, flags)				\
 do {								\
 	raw_spin_lock_irqsave(spinlock_check(lock), flags);	\

@@ -122,22 +122,27 @@ struct vm_region {
 };
 
 /*
+ * 用来描述一个虚拟内存区域
+ * 内核每个内存区域作为一个单独的内存对象管理，每个区域都有属性，如权限。
+ * 程序的代码段，数据段和bss段在内核中都分别用一个该结构体来描述
+ */
+/*
  * This struct defines a memory VMM memory area. There is one of these
  * per VM-area/task.  A VM area is any part of the process virtual memory
  * space that has a special rule for the page-fault handlers (ie a shared
  * library, the executable area etc).
  */
 struct vm_area_struct {
-	struct mm_struct * vm_mm;	/* The address space we belong to. */
-	unsigned long vm_start;		/* Our start address within vm_mm. */
-	unsigned long vm_end;		/* The first byte after our end address
-					   within vm_mm. */
+	struct mm_struct * vm_mm;	/* The address space we belong to. */   // 虚拟内存区域所在的虚拟地址空间
+	unsigned long vm_start;		/* Our start address within vm_mm. */   // 在虚拟内存中的起始地址
+	unsigned long vm_end;		/* The first byte after our end address 
+					   within vm_mm. */  // 在虚拟内存中的终止地址
 
 	/* linked list of VM areas per task, sorted by address */
-	struct vm_area_struct *vm_next, *vm_prev;
+	struct vm_area_struct *vm_next, *vm_prev;   // 指向上一个，下一个虚拟内存区域
 
-	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */
-	unsigned long vm_flags;		/* Flags, see mm.h. */
+	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */ // 访问权限
+	unsigned long vm_flags;		/* Flags, see mm.h. */    // 虚拟内存区域标志
 
 	struct rb_node vm_rb;
 
@@ -168,7 +173,7 @@ struct vm_area_struct {
 	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
 
 	/* Function pointers to deal with this struct. */
-	const struct vm_operations_struct *vm_ops;
+	const struct vm_operations_struct *vm_ops;   // 对该虚拟内存区域的操作函数集
 
 	/* Information about our backing store: */
 	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
@@ -220,9 +225,9 @@ struct mm_rss_stat {
 #endif /* !USE_SPLIT_PTLOCKS */
 
 struct mm_struct {
-	struct vm_area_struct * mmap;		/* list of VMAs */
-	struct rb_root mm_rb;
-	struct vm_area_struct * mmap_cache;	/* last find_vma result */
+	struct vm_area_struct * mmap;		/* list of VMAs */   // 指向虚拟区域（VMA）链表
+	struct rb_root mm_rb;       // 用来管理虚拟区域
+	struct vm_area_struct * mmap_cache;	/* last find_vma result */ // 指向最近找到的虚拟空间
 #ifdef CONFIG_MMU
 	unsigned long (*get_unmapped_area) (struct file *filp,
 				unsigned long addr, unsigned long len,
@@ -233,17 +238,17 @@ struct mm_struct {
 	unsigned long task_size;		/* size of task vm space */
 	unsigned long cached_hole_size; 	/* if non-zero, the largest hole below free_area_cache */
 	unsigned long free_area_cache;		/* first hole of size cached_hole_size or larger */
-	pgd_t * pgd;
+	pgd_t * pgd;                /* 指向页目录表 */
 	atomic_t mm_users;			/* How many users with user space? */
 	atomic_t mm_count;			/* How many references to "struct mm_struct" (users count as 1) */
-	int map_count;				/* number of VMAs */
+	int map_count;				/* number of VMAs */ // 虚拟区域个数
 	struct rw_semaphore mmap_sem;
 	spinlock_t page_table_lock;		/* Protects page tables and some counters */
 
 	struct list_head mmlist;		/* List of maybe swapped mm's.	These are globally strung
 						 * together off init_mm.mmlist, and are protected
 						 * by mmlist_lock
-						 */
+						 */   // 所有活动的虚拟区域的链表
 
 
 	unsigned long hiwater_rss;	/* High-watermark of RSS usage */
