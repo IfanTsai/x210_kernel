@@ -193,19 +193,19 @@ wait_queue_head_t *bit_waitqueue(void *, int);
 
 #define __wait_event(wq, condition) 					\
 do {									\
-	/* 实例化一个等待队列中的节点，并获取当前进程pcb */
+	/* 实例化一个等待队列中的节点，并获取当前进程pcb */ \
 	DEFINE_WAIT(__wait);						\
 									\
 	for (;;) {							\
-		/* 将节点加入到等待队列中,         并设置当前进程状态不可打断 */
+		/* 将节点加入到等待队列中,         并设置当前进程状态不可打断 */ \
 		prepare_to_wait(&wq, &__wait, TASK_UNINTERRUPTIBLE);	\
-		/* 满足唤醒条件， 则退出循环 */
+		/* 满足唤醒条件， 则退出循环 */ \
 		if (condition)						\
 			break;						\
-		/* 调度其他进程 */
-		schedule();						\  
+		/* 调度其他进程 */   \
+		schedule();						\
 	}								\
-	/* 结束等待 */
+	/* 结束等待 */   \
 	finish_wait(&wq, &__wait);					\
 } while (0)
 
@@ -598,7 +598,7 @@ int wake_bit_function(wait_queue_t *wait, unsigned mode, int sync, void *key);
 
 #define DEFINE_WAIT_FUNC(name, function)				\
 	wait_queue_t name = {						\
-		.private	= current,				\     /* 当前进程的task_struct实例 (PCB)*/
+		.private	= current,				 /* 当前进程的task_struct实例 (PCB)*/\
 		.func		= function,				\
 		.task_list	= LIST_HEAD_INIT((name).task_list),	\
 	}
