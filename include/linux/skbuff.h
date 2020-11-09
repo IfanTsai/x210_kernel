@@ -311,7 +311,7 @@ typedef unsigned char *sk_buff_data_t;
  *	@secmark: security marking
  *	@vlan_tci: vlan tag control information
  */
-
+/* 套接字缓冲区 */
 struct sk_buff {
 	/* These two members must be first. */
 	struct sk_buff		*next;

@@ -939,6 +939,13 @@ struct dm9000_rxhdr {
 } __attribute__((__packed__));
 
 /*
+ * 1. Dummy read 第一个字节，01表示正常
+ * 2. 读取头部并放到 struct dm9000_rxhdr rxhdr 中，判断是否是正常的封包
+ * 3. 读取data
+ * 4. 分配 sk_buf， 并把data数据复制到sk_buf中
+ * 5. 调用 netif_rx， 将sk_buffer向上递交给协议接口层
+ */
+/*
  *  Received a packet and pass to upper layer
  */
 static void
@@ -1195,6 +1202,7 @@ dm9000_open(struct net_device *dev)
 
 	irqflags |= IRQF_SHARED;
 
+	/* 注册收发中断 */
 	if (request_irq(dev->irq, dm9000_interrupt, irqflags, dev->name, dev))
 		return -EAGAIN;
 
@@ -1410,7 +1418,7 @@ __setup("mac=", mac_setup);
  * Search DM9000 board, allocate space and register it
  */
 /*
- * 1. 为struct board_info和struct net_device结构体申请内存
+ * 1. 为 struct board_info 和 struct net_device 结构体申请内存
  * 2. 从platform_device中获取dm9000资源: 地址端口、数据端口地址和中断号,
  *    并为端口地址ioremap
  * 3. 给board_info设置读写函数
@@ -1433,7 +1441,7 @@ dm9000_probe(struct platform_device *pdev)
 	u32 id_val;
 
 	/* Init network device */
-	ndev = alloc_etherdev(sizeof(struct board_info)); /* 同时为ndev和db申请内存 */
+	ndev = alloc_etherdev(sizeof(struct board_info)); /* 同时为 ndev 和 db 申请内存, db 内存位于 ndev 后面 */
 	if (!ndev) {
 		dev_err(&pdev->dev, "could not allocate device.\n");
 		return -ENOMEM;
@@ -1454,9 +1462,9 @@ dm9000_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK(&db->phy_poll, dm9000_poll_work);
 
-	db->addr_res = platform_get_resource(pdev, IORESOURCE_MEM, 0); /* dm9000地址端口 */
-	db->data_res = platform_get_resource(pdev, IORESOURCE_MEM, 1); /* dm9000数据端口 */
-	db->irq_res  = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+	db->addr_res = platform_get_resource(pdev, IORESOURCE_MEM, 0); /* dm9000 地址端口 */
+	db->data_res = platform_get_resource(pdev, IORESOURCE_MEM, 1); /* dm9000 数据端口 */
+	db->irq_res  = platform_get_resource(pdev, IORESOURCE_IRQ, 0); /* dm9000 irq 号 */
 
 	if (db->addr_res == NULL || db->data_res == NULL ||
 	    db->irq_res == NULL) {
@@ -1466,6 +1474,7 @@ dm9000_probe(struct platform_device *pdev)
 	}
 
 	db->irq_wake = platform_get_irq(pdev, 1); /* 只定义了一个中断, 所以返回-ENXIO */
+	/* 这一段代码并不会执行 */
 	if (db->irq_wake >= 0) {
 		dev_dbg(db->dev, "wakeup irq %d\n", db->irq_wake);
 
@@ -1489,6 +1498,7 @@ dm9000_probe(struct platform_device *pdev)
 		}
 	}
 
+	/* 申请地址端口内存 */
 	iosize = resource_size(db->addr_res);
 	db->addr_req = request_mem_region(db->addr_res->start, iosize,
 					  pdev->name);
@@ -1507,6 +1517,7 @@ dm9000_probe(struct platform_device *pdev)
 		goto out;
 	}
 
+	/* 申请数据端口内存 */
 	iosize = resource_size(db->data_res);
 	db->data_req = request_mem_region(db->data_res->start, iosize,
 					  pdev->name);
@@ -1541,7 +1552,7 @@ dm9000_probe(struct platform_device *pdev)
 			dm9000_set_io(db, 1);
 
 		if (pdata->flags & DM9000_PLATF_16BITONLY)  /* 只有这个if成立 */
-			dm9000_set_io(db, 2);  /* 设置board_info的读写函数 */
+			dm9000_set_io(db, 2);  /* 设置 board_info 的读写函数 */
 
 		if (pdata->flags & DM9000_PLATF_32BITONLY)
 			dm9000_set_io(db, 4);
@@ -1565,7 +1576,7 @@ dm9000_probe(struct platform_device *pdev)
 	db->flags |= DM9000_PLATF_SIMPLE_PHY;
 #endif
 
-	dm9000_reset(db);
+	dm9000_reset(db);    /* 重启 dm9000 */
 
 	/* try multiple times, DM9000 sometimes gets the read wrong */
 	for (i = 0; i < 8; i++) {
@@ -1649,7 +1660,7 @@ dm9000_probe(struct platform_device *pdev)
 			 "set using ifconfig\n", ndev->name);
 
 	platform_set_drvdata(pdev, ndev);
-	ret = register_netdev(ndev);
+	ret = register_netdev(ndev);   // 注册网络设备
 
 	if (ret == 0)
 		printk(KERN_INFO "%s: dm9000%c at %p,%p IRQ %d MAC: %pM (%s)\n",

@@ -336,16 +336,15 @@ const struct header_ops eth_header_ops ____cacheline_aligned = {
  */
 void ether_setup(struct net_device *dev)
 {
-	dev->header_ops		= &eth_header_ops;
-	dev->type		= ARPHRD_ETHER;
-	dev->hard_header_len 	= ETH_HLEN;
-	dev->mtu		= ETH_DATA_LEN;
-	dev->addr_len		= ETH_ALEN;
+	dev->header_ops		= &eth_header_ops; /* 硬件头部操作函数集， 主要完成创建硬件头和从 sk_buf 分析硬件头等操作 */
+	dev->type		= ARPHRD_ETHER;     // 设置以太网协议
+	dev->hard_header_len 	= ETH_HLEN; // 以太网头部大小
+	dev->mtu		= ETH_DATA_LEN;   // 设置以太网 MTU
+	dev->addr_len		= ETH_ALEN;  // mac 地址长度
 	dev->tx_queue_len	= 1000;	/* Ethernet wants good queues */
 	dev->flags		= IFF_BROADCAST|IFF_MULTICAST;
 
 	memset(dev->broadcast, 0xFF, ETH_ALEN);
-
 }
 EXPORT_SYMBOL(ether_setup);
 

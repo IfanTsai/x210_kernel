@@ -777,7 +777,7 @@ struct net_device {
 	 * (i.e. as seen by users in the "Space.c" file).  It is the name
 	 * the interface.
 	 */
-	char			name[IFNAMSIZ];
+	char			name[IFNAMSIZ];            /* 网络设备名称 */
 
 	struct pm_qos_request_list *pm_qos_req;
 
@@ -790,18 +790,18 @@ struct net_device {
 	 *	I/O specific fields
 	 *	FIXME: Merge these and struct ifmap into one
 	 */
-	unsigned long		mem_end;	/* shared mem end	*/
+	unsigned long		mem_end;	/* shared mem end	*/          /* 网络设备共享内存起始地址 */
 	unsigned long		mem_start;	/* shared mem start	*/
-	unsigned long		base_addr;	/* device I/O address	*/
-	unsigned int		irq;		/* device IRQ number	*/
+	unsigned long		base_addr;	/* device I/O address	*/      /* 网络设备 I/O 基地址 */
+	unsigned int		irq;		/* device IRQ number	*/      /* 网络设备中断号 */
 
 	/*
 	 *	Some hardware also needs these fields, but they are not
 	 *	part of the usual set specified in Space.c.
 	 */
 
-	unsigned char		if_port;	/* Selectable AUI, TP,..*/
-	unsigned char		dma;		/* DMA channel		*/
+	unsigned char		if_port;	/* Selectable AUI, TP,..*/  /* 指定多端口设备使用哪一个端口， 该字段仅针对多端口设备 */
+	unsigned char		dma;		/* DMA channel		*/      /* 分配给网络设备的DMA通道 */
 
 	unsigned long		state;
 
@@ -877,11 +877,11 @@ struct net_device {
 	struct iw_public_data *	wireless_data;
 #endif
 	/* Management operations */
-	const struct net_device_ops *netdev_ops;
-	const struct ethtool_ops *ethtool_ops;
+	const struct net_device_ops *netdev_ops; /* 网络设备操作函数集 */
+	const struct ethtool_ops *ethtool_ops;   /* 成员函数与应用空间 ethtool 工具各命令对应 */
 
 	/* Hardware header description */
-	const struct header_ops *header_ops;
+	const struct header_ops *header_ops;  /* 硬件头部操作函数集， 主要完成创建硬件头和从 sk_buf 分析硬件头等操作 */
 
 	unsigned int		flags;	/* interface flags (a la BSD)	*/
 	unsigned short		gflags;
@@ -891,9 +891,9 @@ struct net_device {
 	unsigned char		operstate; /* RFC2863 operstate */
 	unsigned char		link_mode; /* mapping policy to operstate */
 
-	unsigned int		mtu;	/* interface MTU value		*/
-	unsigned short		type;	/* interface hardware type	*/
-	unsigned short		hard_header_len;	/* hardware hdr length	*/
+	unsigned int		mtu;	/* interface MTU value		*/         /* MTU， 最大传输单元 */
+	unsigned short		type;	/* interface hardware type	*/         /* 数据链路层协议类型 */
+	unsigned short		hard_header_len;	/* hardware hdr length	*/ /* 数据链路层协议头长度,       对于以太网设备即为以太网帧头部长度 */
 
 	/* extra head- and tailroom the hardware may need, but not in all cases
 	 * can this be guaranteed, especially tailroom. Some cases also use
@@ -938,7 +938,7 @@ struct net_device {
  */
 	unsigned long		last_rx;	/* Time of last Rx	*/
 	/* Interface address info used in eth_type_trans() */
-	unsigned char		*dev_addr;	/* hw address, (before bcast
+	unsigned char		*dev_addr;	/* hw address, (before bcast       // mac 地址
 						   because most packets are
 						   unicast) */
 
