@@ -277,6 +277,7 @@ struct zone_reclaim_stat {
 	unsigned long		nr_saved_scan[NR_LRU_LISTS];
 };
 
+/* 内存管理区 */
 struct zone {
 	/* Fields commonly accessed by the page allocator */
 
@@ -318,7 +319,7 @@ struct zone {
 	/* see spanned/present_pages for more description */
 	seqlock_t		span_seqlock;
 #endif
-	struct free_area	free_area[MAX_ORDER];
+	struct free_area	free_area[MAX_ORDER]; // 伙伴系统的11个块链表
 
 #ifndef CONFIG_SPARSEMEM
 	/*
