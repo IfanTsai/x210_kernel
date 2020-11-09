@@ -26,8 +26,8 @@
 #error "PHYS_OFFSET must be at an even 2MiB boundary!"
 #endif
 
-#define KERNEL_RAM_VADDR	(PAGE_OFFSET + TEXT_OFFSET)
-#define KERNEL_RAM_PADDR	(PHYS_OFFSET + TEXT_OFFSET)
+#define KERNEL_RAM_VADDR	(PAGE_OFFSET + TEXT_OFFSET)  // 内核运行时的虚拟地址 0xC0000000 + 0x00008000 = 0xC0008000
+#define KERNEL_RAM_PADDR	(PHYS_OFFSET + TEXT_OFFSET)  // 内核运行时的物理地址 0x30000000 + 0x00008000 = 0x30008000
 
 
 /*
@@ -79,14 +79,14 @@ ENTRY(stext)
 	setmode	PSR_F_BIT | PSR_I_BIT | SVC_MODE, r9 @ ensure svc mode
 						@ and irqs disabled
 	mrc	p15, 0, r9, c0, c0		@ get processor id
-	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
+	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid   @ 校验从 cp15 协处理器读取的 cpu id
 	movs	r10, r5				@ invalid processor (r5=0)?
 	beq	__error_p			@ yes, error 'p'
-	bl	__lookup_machine_type		@ r5=machinfo
+	bl	__lookup_machine_type		@ r5=machinfo  @ 校验 machine id
 	movs	r8, r5				@ invalid machine (r5=0)?
 	beq	__error_a			@ yes, error 'a'
-	bl	__vet_atags
-	bl	__create_page_tables
+	bl	__vet_atags    @ 校验 uboot 的传参格式
+	bl	__create_page_tables  @ 建立段式页表(临时建立), 1MB一个映射, 4GB内存需要4096个页表项，因此需要16KB内存放页表
 
 	/*
 	 * The following calls CPU specific code in a position independent
