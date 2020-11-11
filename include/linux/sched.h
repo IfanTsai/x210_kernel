@@ -179,14 +179,14 @@ print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
  * modifying one set can't modify the other one by
  * mistake.
  */
-#define TASK_RUNNING		0
-#define TASK_INTERRUPTIBLE	1
-#define TASK_UNINTERRUPTIBLE	2
-#define __TASK_STOPPED		4
-#define __TASK_TRACED		8
+#define TASK_RUNNING		 0  // 就绪态. 表示进程要么正在执行，要么正要准备执行（已经就绪），正在等待cpu时间片的调度
+#define TASK_INTERRUPTIBLE	 1  // 浅睡眠.
+#define TASK_UNINTERRUPTIBLE 2  // 深睡眠.
+#define __TASK_STOPPED		 4  // 停止态. 当进程接收到SIGSTOP、SIGTTIN、SIGTSTP或者SIGTTOU信号之后就会进入该状态
+#define __TASK_TRACED		 8  // 表示进程被debugger等进程监视，进程执行被调试程序所停止，当一个进程被另外的进程所监视，每一个信号都会让进程进入该状态
 /* in tsk->exit_state */
-#define EXIT_ZOMBIE		16
-#define EXIT_DEAD		32
+#define EXIT_ZOMBIE		16    // 僵尸态
+#define EXIT_DEAD		32    // 最终退出态
 /* in tsk->state again */
 #define TASK_DEAD		64
 #define TASK_WAKEKILL		128
@@ -199,6 +199,7 @@ extern char ___assert_task_state[1 - 2*!!(
 		sizeof(TASK_STATE_TO_CHAR_STR)-1 != ilog2(TASK_STATE_MAX)+1)];
 
 /* Convenience macros for the sake of set_task_state */
+// Linux Kernel 2.6.25引入，当进程处于这种可以终止的新睡眠状态中，它的运行原理类似于 TASK_UNINTERRUPTIBLE，只不过可以被致命信号唤醒
 #define TASK_KILLABLE		(TASK_WAKEKILL | TASK_UNINTERRUPTIBLE)
 #define TASK_STOPPED		(TASK_WAKEKILL | __TASK_STOPPED)
 #define TASK_TRACED		(TASK_WAKEKILL | __TASK_TRACED)
@@ -1169,7 +1170,14 @@ struct task_struct {
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	void *stack;
 	atomic_t usage;
-	unsigned int flags;	/* per process flags, defined below */
+	unsigned int flags;	/* per process flags, defined below */ // 进程状态，但不是运行状态，用于内核识别进程当前状态，以备下一步操作, 取值PF_开头宏
+    /*
+     * Ptrace 提供了一种父进程可以控制子进程运行，并可以检查和改变它的核心image。
+     * 它主要用于实现断点调试。一个被跟踪的进程运行中，直到发生一个信号, 则进程被中止，并且通知其父进程。
+     * 在进程中止的状态下，进程的内存空间可以被读写。父进程还可以使子进程继续执行，并选择是否是否忽略引起中止的信号。
+     *
+     * 设置为0时表示不需要被跟踪，其它取值为 PT_ 开头宏
+     */
 	unsigned int ptrace;
 
 	int lock_depth;		/* BKL lock depth */
@@ -1179,7 +1187,11 @@ struct task_struct {
 	int oncpu;
 #endif
 #endif
-
+    /*
+     * prio: 动态优先级
+     * static_prio: 静态优先级，可以通过nice系统调用来进行修改
+     *
+     */
 	int prio, static_prio, normal_prio;
 	unsigned int rt_priority;
 	const struct sched_class *sched_class;
@@ -1253,14 +1265,14 @@ struct task_struct {
 	 * older sibling, respectively.  (p->father can be replaced with 
 	 * p->real_parent->pid)
 	 */
-	struct task_struct *real_parent; /* real parent process */
-	struct task_struct *parent; /* recipient of SIGCHLD, wait4() reports */
+	struct task_struct *real_parent; /* real parent process */  // 指向其父进程，如果创建它的父进程不再存在，则指向PID为1的init进程
+	struct task_struct *parent; /* recipient of SIGCHLD, wait4() reports */  // 指向其父进程，当它终止时，必须向它的父进程发送信号。它的值通常与real_parent相同
 	/*
 	 * children/sibling forms the list of my natural children
 	 */
-	struct list_head children;	/* list of my children */
-	struct list_head sibling;	/* linkage in my parent's children list */
-	struct task_struct *group_leader;	/* threadgroup leader */
+	struct list_head children;	/* list of my children */  // 子进程链表
+	struct list_head sibling;	/* linkage in my parent's children list */ // 兄弟进程链表
+	struct task_struct *group_leader;	/* threadgroup leader */ // 指向其所在进程组组长
 
 	/*
 	 * ptraced is the list of tasks this task is using ptrace on.
@@ -1437,6 +1449,12 @@ struct task_struct {
 	struct list_head pi_state_list;
 	struct futex_pi_state *pi_state_cache;
 #endif
+/*
+ * Performance Event是一款随 Linux 内核代码一同发布和维护的性能诊断工具。
+ * 这些成员用于帮助PerformanceEvent分析进程的性能问题
+ * https://www.ibm.com/developerworks/cn/linux/l-cn-perf1/index.html?ca=drs-#major1
+ * https://www.ibm.com/developerworks/cn/linux/l-cn-perf2/index.html?ca=drs-#major1
+ */
 #ifdef CONFIG_PERF_EVENTS
 	struct perf_event_context *perf_event_ctxp;
 	struct mutex perf_event_mutex;
@@ -1937,8 +1955,8 @@ void yield(void);
 extern struct exec_domain	default_exec_domain;
 
 union thread_union {
-	struct thread_info thread_info;
-	unsigned long stack[THREAD_SIZE/sizeof(long)];
+	struct thread_info thread_info;   // 线程描述符
+	unsigned long stack[THREAD_SIZE/sizeof(long)];  // 内核线程栈
 };
 
 #ifndef __HAVE_ARCH_KSTACK_END
@@ -2223,6 +2241,7 @@ static inline void unlock_task_sighand(struct task_struct *tsk,
 
 #ifndef __HAVE_THREAD_FUNCTIONS
 
+// task_struct 中没有直接指向thread_info结构的指针，而是用一个void指针类型的成员表示，然后通过类型转换来访问thread_info结构
 #define task_thread_info(task)	((struct thread_info *)(task)->stack)
 #define task_stack_page(task)	((task)->stack)
 

@@ -91,9 +91,14 @@ struct thread_info {
  */
 static inline struct thread_info *current_thread_info(void) __attribute_const__;
 
+/* 获取当前在CPU上正在运行进程的thread_info */
 static inline struct thread_info *current_thread_info(void)
 {
 	register unsigned long sp asm ("sp");
+    /*
+     * Linux把thread_info（线程描述符）和内核态的线程堆栈存放在一起，这块区域通常是8KB（占两个页框），其地址必须是8192的整数倍
+     * 屏蔽掉esp的低13位有效位就可以获得thread_info结构的基地址
+     */
 	return (struct thread_info *)(sp & ~(THREAD_SIZE - 1));
 }
 
