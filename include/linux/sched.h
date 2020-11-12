@@ -32,12 +32,12 @@
 /*
  * Scheduling policies
  */
-#define SCHED_NORMAL		0
-#define SCHED_FIFO		1
-#define SCHED_RR		2
-#define SCHED_BATCH		3
+#define SCHED_NORMAL	0   // 普通进程, CFS 调度
+#define SCHED_FIFO		1   // 先入先出调度算法（实时调度策略），相同优先级的任务先到先服务，高优先级的任务可以抢占低优先级的任务
+#define SCHED_RR		2   // 轮流调度算法（实时调度策略), 高优先级的任务可以抢占低优先级的任务 
+#define SCHED_BATCH		3   // SCHED_NORMAL普通进程策略的分化版本。采用分时策略，根据动态优先级(可用nice()API设置），分配 CPU 运算资源)
 /* SCHED_ISO: reserved but not implemented yet */
-#define SCHED_IDLE		5
+#define SCHED_IDLE		5   // 优先级最低，在系统空闲时才跑这类进程
 /* Can be ORed in to make sure the process is reverted back to SCHED_NORMAL on fork */
 #define SCHED_RESET_ON_FORK     0x40000000
 
@@ -1169,7 +1169,7 @@ struct rcu_node;
 struct task_struct {
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	void *stack;
-	atomic_t usage;
+	atomic_t usage;  // 进程描述符使用计数，被置为2时，表示进程描述符正在被使用而且其相应的进程处于活动状态
 	unsigned int flags;	/* per process flags, defined below */ // 进程状态，但不是运行状态，用于内核识别进程当前状态，以备下一步操作, 取值PF_开头宏
     /*
      * Ptrace 提供了一种父进程可以控制子进程运行，并可以检查和改变它的核心image。
@@ -1180,23 +1180,24 @@ struct task_struct {
      */
 	unsigned int ptrace;
 
-	int lock_depth;		/* BKL lock depth */
+	int lock_depth;		/* BKL lock depth */  // 用于表示获取大内核锁的次数，如果进程未获得过锁，则置为-1
 
 #ifdef CONFIG_SMP
 #ifdef __ARCH_WANT_UNLOCKED_CTXSW
-	int oncpu;
+	int oncpu;  // 在SMP上帮助实现无加锁的进程切换（unlocked context switches）
 #endif
 #endif
     /*
      * prio: 动态优先级
      * static_prio: 静态优先级，可以通过nice系统调用来进行修改
-     *
+     * normal_prio: 值取决于静态优先级和调度策略
+     * rt_prio: 实时优先级
      */
 	int prio, static_prio, normal_prio;
 	unsigned int rt_priority;
-	const struct sched_class *sched_class;
-	struct sched_entity se;
-	struct sched_rt_entity rt;
+	const struct sched_class *sched_class; // 调度类
+	struct sched_entity se;    // 普通进程的调用实体，每个进程都有其中之一的实体
+	struct sched_rt_entity rt; // 实时进程的调用实体，每个进程都有其中之一的实体
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	/* list of struct preempt_notifier: */
@@ -1216,8 +1217,8 @@ struct task_struct {
 	unsigned int btrace_seq;
 #endif
 
-	unsigned int policy;
-	cpumask_t cpus_allowed;
+	unsigned int policy;    // 调度策略, 值为 SCHED_ 开头宏
+	cpumask_t cpus_allowed; // 用于控制进程可以在哪里处理器上运行
 
 #ifdef CONFIG_TREE_PREEMPT_RCU
 	int rcu_read_lock_nesting;
@@ -1227,30 +1228,44 @@ struct task_struct {
 #endif /* #ifdef CONFIG_TREE_PREEMPT_RCU */
 
 #if defined(CONFIG_SCHEDSTATS) || defined(CONFIG_TASK_DELAY_ACCT)
-	struct sched_info sched_info;
+	struct sched_info sched_info; // 用于调度器统计进程的运行信息
 #endif
 
 	struct list_head tasks;
 	struct plist_node pushable_tasks;
-
+    
+    /*
+     * mm: 进程所拥有的用户空间内存描述符，内核线程 mm 为NULL
+     * active_mm: active_mm 指向进程运行时所使用的内存描述符， 对于普通进程而言，这两个指针变量的值相同
+     *            内核线程 kernel thread 是没有进程地址空间的，所以内核线程的 tsk->mm 域是空（NULL）
+     *            但内核必须知道用户空间包含了什么，因此它的 active_mm 成员被初始化为前一个运行进程的 active_mm 值
+     *            如果当前内核线程被调度之前运行的也是另外一个内核线程时候，那么其 mm 和 avtive_mm 都是 NULL
+     */
 	struct mm_struct *mm, *active_mm; // 内核使用 mm_struct 来描述一个进程的虚拟地址空间
 #if defined(SPLIT_RSS_COUNTING)
-	struct task_rss_stat	rss_stat;
+	struct task_rss_stat	rss_stat; // 用来记录缓冲信息
 #endif
 /* task state */
-	int exit_state;
+	int exit_state;  // EXIT_ZOMBIE EXIT_DEAD, 既可以被添加到 state 域中，又可以被添加到 exit_state 域中
+    /*
+     * exit_code: 进程的终止代号，值要么是 _exit() 或 exit_group() 系统调用参数（正常终止），要么是由内核提供的一个错误代号（异常终止）
+     * exit_signal: 被置为-1时表示是某个线程组中的一员。只有当线程组的最后一个线程终止时，才会产生一个信号，以通知线程组所属进程的父进程
+     */
 	int exit_code, exit_signal;
-	int pdeath_signal;  /*  The signal sent when the parent dies  */
+	int pdeath_signal;  /*  The signal sent when the parent dies  */ // 用于判断父进程终止时发送信号
 	/* ??? */
+    // 用于处理不同的ABI，https://man7.org/linux/man-pages/man2/personality.2.html
 	unsigned int personality;
 	unsigned did_exec:1;
+    // 用于通知LSM是否被do_execve()函数所调用, 详见补丁说明：http://lkml.iu.edu/hypermail/linux/kernel/0901.1/00014.html
 	unsigned in_execve:1;	/* Tell the LSMs that the process is doing an
 				 * execve */
+    // 用于判断是否进行iowait计数
 	unsigned in_iowait:1;
 
 
 	/* Revert to default priority/policy when forking */
-	unsigned sched_reset_on_fork:1;
+	unsigned sched_reset_on_fork:1; // 用于判断是否恢复默认的优先级或调度策略
 
 	pid_t pid;    // 线程id，top -H 命令的线程视角 (在linux中，一个线程唯一对应一个task struct， 每个 task struct的 pid 唯一)
 	pid_t tgid;   // 线程组id，top命令的进程视角 (getpid 函数返回的是 tgid, gettid 函数才是返回的 pid)
@@ -1290,18 +1305,28 @@ struct task_struct {
 	int __user *set_child_tid;		/* CLONE_CHILD_SETTID */
 	int __user *clear_child_tid;		/* CLONE_CHILD_CLEARTID */
 
+    /*
+     * utime/stime: 用于记录进程在用户态/内核态下所经过的节拍数（定时器）
+     * utimescaled/stimescaled: 用于记录进程在用户态/内核态的运行时间，但它们以处理器的频率为刻度
+     */
 	cputime_t utime, stime, utimescaled, stimescaled;
-	cputime_t gtime;
+	cputime_t gtime; // 以节拍计数的虚拟机运行时间（guest time）
 #ifndef CONFIG_VIRT_CPU_ACCOUNTING
+    // 先前的运行时间，详见补丁说明: http://lkml.iu.edu/hypermail/linux/kernel/1003.3/02431.html
 	cputime_t prev_utime, prev_stime;
 #endif
+    // nvcsw/nivcsw: 是自愿（voluntary）/非自愿（involuntary）上下文切换计数
 	unsigned long nvcsw, nivcsw; /* context switch counts */
+    /*
+     * start_time/real_start_time: 进程创建时间，real_start_time还包含了进程睡眠时间，常用于/proc/pid/stat
+     *                             详见补丁说明：http://lkml.iu.edu/hypermail/linux/kernel/0705.0/2094.html
+     */
 	struct timespec start_time; 		/* monotonic time */
 	struct timespec real_start_time;	/* boot based time */
 /* mm fault and swap info: this can arguably be seen as either mm-specific or thread-specific */
 	unsigned long min_flt, maj_flt;
 
-	struct task_cputime cputime_expires;
+	struct task_cputime cputime_expires;  // 用来统计进程或进程组被跟踪的处理器时间，其中的三个成员对应着cpu_timers[3]的三个链表
 	struct list_head cpu_timers[3];
 
 /* process credentials */
@@ -1326,7 +1351,7 @@ struct task_struct {
 #endif
 #ifdef CONFIG_DETECT_HUNG_TASK
 /* hung task detection */
-	unsigned long last_switch_count;
+	unsigned long last_switch_count;  // nvcsw和nivcsw的总和
 #endif
 /* CPU-specific state of this task */
 	struct thread_struct thread;
@@ -1339,14 +1364,14 @@ struct task_struct {
 /* namespaces */
 	struct nsproxy *nsproxy;
 /* signal handlers */
-	struct signal_struct *signal;
-	struct sighand_struct *sighand;
+	struct signal_struct *signal;    // 指向进程的信号描述符
+	struct sighand_struct *sighand;  // 指向进程的信号处理程序描述符
 
-	sigset_t blocked, real_blocked;
+	sigset_t blocked, real_blocked; // blocked 表示被阻塞信号的掩码，real_blocked 表示临时掩码
 	sigset_t saved_sigmask;	/* restored if set_restore_sigmask() was used */
-	struct sigpending pending;
+	struct sigpending pending; // 存放私有挂起信号的数据结构
 
-	unsigned long sas_ss_sp;
+	unsigned long sas_ss_sp;  // 信号处理程序备用堆栈的地址，sas_ss_size表示堆栈的大小
 	size_t sas_ss_size;
 	int (*notifier)(void *priv);
 	void *notifier_data;
@@ -1363,7 +1388,7 @@ struct task_struct {
    	u32 self_exec_id;
 /* Protection of (de-)allocation: mm, files, fs, tty, keyrings, mems_allowed,
  * mempolicy */
-	spinlock_t alloc_lock;
+	spinlock_t alloc_lock;  // 用于保护资源分配或释放的自旋锁
 
 #ifdef CONFIG_GENERIC_HARDIRQS
 	/* IRQ handler threads */
