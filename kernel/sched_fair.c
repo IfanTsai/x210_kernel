@@ -427,12 +427,15 @@ int sched_proc_update_handler(struct ctl_table *table, int write,
 /*
  * delta /= w
  */
+ // 实际 delta ---> 虚拟 delta
 static inline unsigned long
 calc_delta_fair(unsigned long delta, struct sched_entity *se)
 {
+    // 默认情况下，大部分进程的权重基本都是 NICE_0_LOAD (1024)
 	if (unlikely(se->load.weight != NICE_0_LOAD))
 		delta = calc_delta_mine(delta, NICE_0_LOAD, &se->load);
 
+    // nice值为0（权重是 NICE_0_LOAD）的进程的虚拟时间和实际时间是相等的，所以无需计算直接返回
 	return delta;
 }
 
@@ -444,6 +447,11 @@ calc_delta_fair(unsigned long delta, struct sched_entity *se)
  *
  * p = (nr <= nl) ? l : l*nr/nl
  */
+ /*
+  * nr_running 是系统中就绪进程数量，
+  * 当超过 sched_nr_latency 时，我们无法保证调度延迟，因此转为保证调度最小粒度时间
+  * 如果 nr_running 并没有超过 sched_nr_latency，那么调度周期就等于调度延迟 sysctl_sched_latency（6ms）
+  */
 static u64 __sched_period(unsigned long nr_running)
 {
 	u64 period = sysctl_sched_latency;
@@ -451,7 +459,7 @@ static u64 __sched_period(unsigned long nr_running)
 
 	if (unlikely(nr_running > nr_latency)) {
 		period = sysctl_sched_min_granularity;
-		period *= nr_running;
+		period *= nr_running;    // 调度延迟 = 进程就绪数量 x 调度最小粒度时间
 	}
 
 	return period;
@@ -463,16 +471,17 @@ static u64 __sched_period(unsigned long nr_running)
  *
  * s = p*P[w/rw]
  */
+ // 计算时间片
 static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	u64 slice = __sched_period(cfs_rq->nr_running + !se->on_rq);
+	u64 slice = __sched_period(cfs_rq->nr_running + !se->on_rq);  // 获取调度周期
 
-	for_each_sched_entity(se) {
+	for_each_sched_entity(se) {       // 没有使能组调度的情况下，循环一次 
 		struct load_weight *load;
 		struct load_weight lw;
 
 		cfs_rq = cfs_rq_of(se);
-		load = &cfs_rq->load;
+		load = &cfs_rq->load;        // 得到就绪队列的权重，也就是就绪队列上所有调度实体权重之和
 
 		if (unlikely(!se->on_rq)) {
 			lw = cfs_rq->load;
@@ -480,6 +489,7 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 			update_load_add(&lw, se->load.weight);
 			load = &lw;
 		}
+		// se->load.weight / load * slice, 即调度实体 se 的权重占整个权重的比例，再乘以调度周期
 		slice = calc_delta_mine(slice, se->load.weight, load);
 	}
 	return slice;
@@ -510,12 +520,13 @@ __update_curr(struct cfs_rq *cfs_rq, struct sched_entity *curr,
 
 	curr->sum_exec_runtime += delta_exec;
 	schedstat_add(cfs_rq, exec_clock, delta_exec);
-	delta_exec_weighted = calc_delta_fair(delta_exec, curr);
+	delta_exec_weighted = calc_delta_fair(delta_exec, curr); // 根据更新的物理时间间隔计算虚拟时间间隔
 
-	curr->vruntime += delta_exec_weighted;
-	update_min_vruntime(cfs_rq);
+	curr->vruntime += delta_exec_weighted; // 更新当前运行的调度实体的虚拟时间
+	update_min_vruntime(cfs_rq);      // 更新 CFS 就绪队列的最小虚拟时间 min_vruntime
 }
 
+/* 新当前正在运行的调度实体的运行时间信息 */
 static void update_curr(struct cfs_rq *cfs_rq)
 {
 	struct sched_entity *curr = cfs_rq->curr;
@@ -530,7 +541,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	 * since the last time we changed load (this cannot
 	 * overflow on 32 bits):
 	 */
-	delta_exec = (unsigned long)(now - curr->exec_start);
+	delta_exec = (unsigned long)(now - curr->exec_start); // 计算本次更新虚拟时间距离上次更新虚拟时间的差值
 	if (!delta_exec)
 		return;
 
@@ -723,6 +734,7 @@ static void check_spread(struct cfs_rq *cfs_rq, struct sched_entity *se)
 #endif
 }
 
+/* 在进程创建以及唤醒的时候都会调用, initial = 1: 创建， initial = 0： 唤醒 */
 static void
 place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 {
@@ -735,7 +747,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 	 * stays open at the end.
 	 */
 	if (initial && sched_feat(START_DEBIT))
-		vruntime += sched_vslice(cfs_rq, se);
+		vruntime += sched_vslice(cfs_rq, se);   // 针对刚创建的进程会进行一定的惩罚
 
 	/* sleeps up to a single latency don't count. */
 	if (!initial) {
@@ -748,11 +760,11 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 		if (sched_feat(GENTLE_FAIR_SLEEPERS))
 			thresh >>= 1;
 
-		vruntime -= thresh;
+		vruntime -= thresh;    // 针对刚唤醒的进程会进行一定的补偿
 	}
 
 	/* ensure we never gain time by being placed backwards. */
-	vruntime = max_vruntime(se->vruntime, vruntime);
+	vruntime = max_vruntime(se->vruntime, vruntime);   // 保证调度实体的虚拟时间不能倒退
 
 	se->vruntime = vruntime;
 }
@@ -781,7 +793,7 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	update_stats_enqueue(cfs_rq, se);
 	check_spread(cfs_rq, se);
 	if (se != cfs_rq->curr)
-		__enqueue_entity(cfs_rq, se);
+		__enqueue_entity(cfs_rq, se); // 将 se 加入就绪队列维护的 rbtree 中
 }
 
 static void __clear_buddies(struct cfs_rq *cfs_rq, struct sched_entity *se)
@@ -851,6 +863,10 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 
 	ideal_runtime = sched_slice(cfs_rq, curr);
 	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
+	/* 
+	 * 如果实际运行时间已经超过分配给进程的时间片，自然就需要抢占当前进程
+	 * 设置TIF_NEED_RESCHED flag
+	 */
 	if (delta_exec > ideal_runtime) {
 		resched_task(rq_of(cfs_rq)->curr);
 		/*
@@ -873,11 +889,11 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 		return;
 
 	if (cfs_rq->nr_running > 1) {
-		struct sched_entity *se = __pick_next_entity(cfs_rq);
+		struct sched_entity *se = __pick_next_entity(cfs_rq); // 从红黑树中找到虚拟时间最小的调度实体
 		s64 delta = curr->vruntime - se->vruntime;
 
 		if (delta > ideal_runtime)
-			resched_task(rq_of(cfs_rq)->curr);
+			resched_task(rq_of(cfs_rq)->curr); // 抢占当前进程，需要调度最左下实体
 	}
 }
 
@@ -1051,11 +1067,11 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	struct cfs_rq *cfs_rq;
 	struct sched_entity *se = &p->se;
 
-	for_each_sched_entity(se) {
-		if (se->on_rq)
+	for_each_sched_entity(se) {    // 没有使能组调度的情况下，循环一次 
+		if (se->on_rq)   // 判断是否已在就绪队列中
 			break;
 		cfs_rq = cfs_rq_of(se);
-		enqueue_entity(cfs_rq, se, flags);
+		enqueue_entity(cfs_rq, se, flags);    // 将调度实体入队 
 		flags = ENQUEUE_WAKEUP;
 	}
 
@@ -3680,7 +3696,7 @@ static const struct sched_class fair_sched_class = {
 
 	.set_curr_task          = set_curr_task_fair,
 	.task_tick		= task_tick_fair,
-	.task_fork		= task_fork_fair,
+	.task_fork		= task_fork_fair,   // fork 时回调
 
 	.prio_changed		= prio_changed_fair,
 	.switched_to		= switched_to_fair,

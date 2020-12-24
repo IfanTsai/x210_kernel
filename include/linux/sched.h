@@ -1034,16 +1034,23 @@ struct sched_domain;
 
 #define DEQUEUE_SLEEP		1
 
+/*
+ *      调度类	                描述	            调度策略
+ *   dl_sched_class	    deadline调度器	      SCHED_DEADLINE
+ *   rt_sched_class	    实时调度器	         SCHED_FIFO、SCHED_RR
+ *   fair_sched_class	完全公平调度器	         SCHED_NORMAL、SCHED_BATCH
+ *   idle_sched_class	idle task	        SCHED_IDLE
+ */
 struct sched_class {
-	const struct sched_class *next;
+	const struct sched_class *next;  // 指向下一个调度类
 
-	void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags);
-	void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);
+	void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags);  // 进程入队
+	void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);  // 进程出队
 	void (*yield_task) (struct rq *rq);
 
-	void (*check_preempt_curr) (struct rq *rq, struct task_struct *p, int flags);
+	void (*check_preempt_curr) (struct rq *rq, struct task_struct *p, int flags); // 检查进程是否可抢占
 
-	struct task_struct * (*pick_next_task) (struct rq *rq);
+	struct task_struct * (*pick_next_task) (struct rq *rq);        // 从 rq 中选一个最适合运行的进程
 	void (*put_prev_task) (struct rq *rq, struct task_struct *p);
 
 #ifdef CONFIG_SMP
@@ -1122,15 +1129,21 @@ struct sched_statistics {
 };
 #endif
 
+/*
+ * Linux 通过 task_struct 结构体描述每一个进程
+ * 但是调度类管理和调度的单位是调度实体，并不是 task_struct
+ * 在支持组调度的时候，一个组也会抽象成一个调度实体，它并不是一个 task
+ */
+ /* CFS 调度实体 */
 struct sched_entity {
-	struct load_weight	load;		/* for load-balancing */
-	struct rb_node		run_node;
+	struct load_weight	load;		/* for load-balancing */ // 权重信息，在计算虚拟时间的时候会用到 inv_weight成员
+	struct rb_node		run_node;    // rq 维护的 rbtree 上的挂载点 
 	struct list_head	group_node;
-	unsigned int		on_rq;
+	unsigned int		on_rq;      // 调度实体 se 入 rq 后，置 1. 出 rq 后，置 0
 
 	u64			exec_start;
-	u64			sum_exec_runtime;
-	u64			vruntime;
+	u64			sum_exec_runtime;       // 调度实体已运行的实际时间总和
+	u64			vruntime;               // 调度实体已运行的虚拟时间总和
 	u64			prev_sum_exec_runtime;
 
 	u64			nr_migrations;

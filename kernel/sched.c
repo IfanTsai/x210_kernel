@@ -315,10 +315,10 @@ struct cfs_rq {
 	unsigned long nr_running;
 
 	u64 exec_clock;
-	u64 min_vruntime;
+	u64 min_vruntime;    // 跟踪就绪队列上所有调度实体的最小虚拟时间
 
-	struct rb_root tasks_timeline;
-	struct rb_node *rb_leftmost;
+	struct rb_root tasks_timeline;   // 跟踪调度实体按虚拟时间大小排序的红黑树根
+	struct rb_node *rb_leftmost;    // 红黑树中最左下的调度实体
 
 	struct list_head tasks;
 	struct list_head *balance_iterator;
@@ -446,6 +446,7 @@ static struct root_domain def_root_domain;
  * (such as the load balancing or the thread migration code), lock
  * acquire operations must be ordered by ascending &runqueue.
  */
+ // 每个 cpu 都会有一个全局的就绪队列
 struct rq {
 	/* runqueue lock: */
 	raw_spinlock_t lock;
@@ -454,7 +455,7 @@ struct rq {
 	 * nr_running and cpu_load should be in the same cacheline because
 	 * remote CPUs use both these fields when doing load calculation.
 	 */
-	unsigned long nr_running;
+	unsigned long nr_running;       // 就绪队列上调度实体的个数
 	#define CPU_LOAD_IDX_MAX 5
 	unsigned long cpu_load[CPU_LOAD_IDX_MAX];
 #ifdef CONFIG_NO_HZ
@@ -464,10 +465,11 @@ struct rq {
 	unsigned int skip_clock_update;
 
 	/* capture load from *all* tasks on this cpu: */
-	struct load_weight load;
+	struct load_weight load;       // 就绪队列权重，值为管理的所有调度实体的权重之和
 	unsigned long nr_load_updates;
 	u64 nr_switches;
 
+    /* 每一个调度类也有属于自己管理的就绪队列 */
 	struct cfs_rq cfs;
 	struct rt_rq rt;
 
@@ -1353,6 +1355,8 @@ static inline void update_load_sub(struct load_weight *lw, unsigned long dec)
  * If a task goes up by ~10% and another task goes down by ~10% then
  * the relative distance between them is ~25%.)
  */
+ // weight = 1024 / (1.25 ^ nice)
+ // 1.25取值依据是：进程每降低一个nice值，将多获得10% cpu的时间
 static const int prio_to_weight[40] = {
  /* -20 */     88761,     71755,     56483,     46273,     36291,
  /* -15 */     29154,     23254,     18705,     14949,     11916,
@@ -1371,6 +1375,20 @@ static const int prio_to_weight[40] = {
  * precalculated inverse to speed up arithmetics by turning divisions
  * into multiplications:
  */
+ /*
+                                 NICE_0_LOAD
+vriture_runtime = wall_time * ----------------
+                                    weight
+  
+                                   NICE_0_LOAD * 2^32
+                = (wall_time * -------------------------) >> 32
+                                        weight
+                                                                                        2^32
+                = (wall_time * NICE_0_LOAD * inv_weight) >> 32        (inv_weight = ------------ )
+
+                                                                                        weight 
+*/
+// prio_to_wmult[i] = 2 ^ 32 / prio_to_weight[i]
 static const u32 prio_to_wmult[40] = {
  /* -20 */     48388,     59856,     76040,     92818,    118348,
  /* -15 */    147320,    184698,    229616,    287308,    360437,
@@ -2480,7 +2498,7 @@ void sched_fork(struct task_struct *p, int clone_flags)
 	p->prio = current->normal_prio;
 
 	if (!rt_prio(p->prio))
-		p->sched_class = &fair_sched_class;
+		p->sched_class = &fair_sched_class;   // 设置 CFS 调度类
 
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
@@ -2537,7 +2555,7 @@ void wake_up_new_task(struct task_struct *p, unsigned long clone_flags)
 	 * We set TASK_WAKING so that select_task_rq() can drop rq->lock
 	 * without people poking at ->cpus_allowed.
 	 */
-	cpu = select_task_rq(rq, p, SD_BALANCE_FORK, 0);
+	cpu = select_task_rq(rq, p, SD_BALANCE_FORK, 0); //  选择空闲 cpu
 	set_task_cpu(p, cpu);
 
 	p->state = TASK_RUNNING;
@@ -2545,9 +2563,9 @@ void wake_up_new_task(struct task_struct *p, unsigned long clone_flags)
 #endif
 
 	rq = task_rq_lock(p, &flags);
-	activate_task(rq, p, 0);
+	activate_task(rq, p, 0);                 // 加入就绪队列
 	trace_sched_wakeup_new(p, 1);
-	check_preempt_curr(rq, p, WF_FORK);
+	check_preempt_curr(rq, p, WF_FORK);     // 检查是否满足抢占
 #ifdef CONFIG_SMP
 	if (p->sched_class->task_woken)
 		p->sched_class->task_woken(rq, p);
@@ -3569,7 +3587,7 @@ pick_next_task(struct rq *rq)
 		 * Will never be NULL as the idle class always
 		 * returns a non-NULL p:
 		 */
-		class = class->next;
+		class = class->next;   /* 按照优先级顺序遍历所有的调度类，通过next指针遍历单链表 */
 	}
 }
 
@@ -3616,7 +3634,7 @@ need_resched_nonpreemptible:
 		idle_balance(cpu, rq);
 
 	put_prev_task(rq, prev);
-	next = pick_next_task(rq);
+	next = pick_next_task(rq);              // Note: 1. 遍历调度类 pick 最适合运行的进程
 
 	if (likely(prev != next)) {
 		sched_info_switch(prev, next);
@@ -3626,7 +3644,7 @@ need_resched_nonpreemptible:
 		rq->curr = next;
 		++*switch_count;
 
-		context_switch(rq, prev, next); /* unlocks the rq */
+		context_switch(rq, prev, next); /* unlocks the rq */   // Note: 2. 切换上下文
 		/*
 		 * the context switch might have flipped the stack from under
 		 * us, hence refresh the local variables.
