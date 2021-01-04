@@ -319,6 +319,7 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 			vruntime = min_vruntime(vruntime, se->vruntime);
 	}
 
+    // 保证就绪队列的最小虚拟时间 min_vruntime 单调递增的特性，更新最小虚拟时间
 	cfs_rq->min_vruntime = max_vruntime(cfs_rq->min_vruntime, vruntime);
 }
 
@@ -636,15 +637,15 @@ add_cfs_task_weight(struct cfs_rq *cfs_rq, unsigned long weight)
 static void
 account_entity_enqueue(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	update_load_add(&cfs_rq->load, se->load.weight);
+	update_load_add(&cfs_rq->load, se->load.weight);     // 更新就绪队列权重：将 se 的权重加上去
 	if (!parent_entity(se))
-		inc_cpu_load(rq_of(cfs_rq), se->load.weight);
+		inc_cpu_load(rq_of(cfs_rq), se->load.weight); // 更新 CPU 全局就绪队列权重
 	if (entity_is_task(se)) {
 		add_cfs_task_weight(cfs_rq, se->load.weight);
 		list_add(&se->group_node, &cfs_rq->tasks);
 	}
-	cfs_rq->nr_running++;
-	se->on_rq = 1;
+	cfs_rq->nr_running++;   // cfs 就绪队列中调度实体个数＋1
+	se->on_rq = 1;   // se 入队标志置1
 }
 
 static void
@@ -777,16 +778,16 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 * through callig update_curr().
 	 */
 	if (!(flags & ENQUEUE_WAKEUP) || (flags & ENQUEUE_WAKING))
-		se->vruntime += cfs_rq->min_vruntime;
+		se->vruntime += cfs_rq->min_vruntime;       // 加回 fork 时减掉的虚拟时间
 
 	/*
 	 * Update run-time statistics of the 'current'.
 	 */
-	update_curr(cfs_rq);
-	account_entity_enqueue(cfs_rq, se);
+	update_curr(cfs_rq);                  // 顺便更新当前调度实体的虚拟时间
+	account_entity_enqueue(cfs_rq, se);   // 更新就绪队列相关信息，如就绪队列的权重
 
 	if (flags & ENQUEUE_WAKEUP) {
-		place_entity(cfs_rq, se, 0);
+		place_entity(cfs_rq, se, 0);     // 针对唤醒的进程，给予补偿
 		enqueue_sleeper(cfs_rq, se);
 	}
 
@@ -1642,8 +1643,8 @@ wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 	if (vdiff <= 0)
 		return -1;
 
-	gran = wakeup_gran(curr, se);
-	if (vdiff > gran)
+	gran = wakeup_gran(curr, se); // 唤醒抢占粒度，根据权重计算的 1ms 的虚拟时间
+	if (vdiff > gran)// 满足抢占条件： 虚拟时间要比正在运行的进程虚拟时间小，且还要小于唤醒抢占粒度，防止频繁抢占引起上下文切换的性能损耗
 		return 1;
 
 	return 0;
@@ -1711,13 +1712,13 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	update_curr(cfs_rq);
 	find_matching_se(&se, &pse);
 	BUG_ON(!pse);
-	if (wakeup_preempt_entity(se, pse) == 1)
+	if (wakeup_preempt_entity(se, pse) == 1)   // 检查进程是否满足抢占
 		goto preempt;
 
 	return;
 
 preempt:
-	resched_task(curr);
+	resched_task(curr);  // 设置 TIF_NEED_RESCHED flag
 	/*
 	 * Only set the backward buddy when the current task is still
 	 * on the rq. This can happen when a wakeup gets interleaved
@@ -3554,8 +3555,8 @@ static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
  */
 static void task_fork_fair(struct task_struct *p)
 {
-	struct cfs_rq *cfs_rq = task_cfs_rq(current);
-	struct sched_entity *se = &p->se, *curr = cfs_rq->curr;
+	struct cfs_rq *cfs_rq = task_cfs_rq(current);    // 获取当前 CFS 调度器的就绪队列
+	struct sched_entity *se = &p->se, *curr = cfs_rq->curr;  // curr 为正在运行的调度实体
 	int this_cpu = smp_processor_id();
 	struct rq *rq = this_rq();
 	unsigned long flags;
@@ -3565,10 +3566,10 @@ static void task_fork_fair(struct task_struct *p)
 	if (unlikely(task_cpu(p) != this_cpu))
 		__set_task_cpu(p, this_cpu);
 
-	update_curr(cfs_rq);
+	update_curr(cfs_rq);  // 更新当前正在运行的调度实体的运行时间信息
 
 	if (curr)
-		se->vruntime = curr->vruntime;
+		se->vruntime = curr->vruntime;   // 初始化新进程的虚拟时间
 	place_entity(cfs_rq, se, 1);
 
 	if (sysctl_sched_child_runs_first && curr && entity_before(curr, se)) {
@@ -3580,7 +3581,7 @@ static void task_fork_fair(struct task_struct *p)
 		resched_task(rq->curr);
 	}
 
-	se->vruntime -= cfs_rq->min_vruntime;
+	se->vruntime -= cfs_rq->min_vruntime;  // 先减后加，唤醒该进程的可能是其他cpu
 
 	raw_spin_unlock_irqrestore(&rq->lock, flags);
 }

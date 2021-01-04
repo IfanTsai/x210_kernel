@@ -1384,6 +1384,10 @@ struct task_struct * __cpuinit fork_idle(int cpu)
  * It copies the process, and if successful kick-starts
  * it and waits for it to finish using the VM if required.
  */
+// 创建流程：do_fork -> copy_process -> sched_fork
+//            p->sched_class = &fair_sched_class;   // 设置 CFS 调度类
+//            p->sched_class->task_fork(p);
+// 
 long do_fork(unsigned long clone_flags,
 	      unsigned long stack_start,
 	      struct pt_regs *regs,
