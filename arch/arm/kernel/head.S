@@ -74,6 +74,15 @@
  * crap here - that's what the boot loader (or in extreme, well justified
  * circumstances, zImage) is for.
  */
+ /*
+  * // void (*theKernel)(int zero, int arch, uint params);
+  * (bootm 0x30008000 ===> hdr->ih_ep = 0x30008000 ==> ep = 0x30008000)
+  * theKernel = (void (*)(int, int, uint))ep; // 将镜像真正开始地址转为函数指针，最后以调用函数形式启动内核
+  * theKernel (0, machid, bd->bi_boot_params);
+  * ARM 架构下，当函数参数不大于 4 个时，传参时使用 r0 - r3 来传递；大于 4 个时, 就需要借助栈来传参
+  * uboot 启动内核，用调用函数的方式来跳转，以函数传参形式来传递参数,
+  * 所以 r0 = 0（一般第一个参数都默认0），r1 = machid（机器码），r2 = bd->bi_boot_params(传参 tag 的首地址)
+  */
 	__HEAD
 ENTRY(stext)
 	setmode	PSR_F_BIT | PSR_I_BIT | SVC_MODE, r9 @ ensure svc mode

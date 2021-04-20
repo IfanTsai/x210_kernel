@@ -376,9 +376,9 @@
 		CALL(sys_perf_event_open)
 /* 365 */	CALL(sys_recvmmsg)
 #ifndef syscalls_counted
-.equ syscalls_padding, ((NR_syscalls + 3) & ~3) - NR_syscalls
+.equ syscalls_padding, ((NR_syscalls + 3) & ~3) - NR_syscalls   // 计算对齐
 #define syscalls_counted
 #endif
 .rept syscalls_padding
-		CALL(sys_ni_syscall)
+		CALL(sys_ni_syscall)   // 重复执行 CALL，     NR_syscalls 对齐到 4 的整数倍
 .endr

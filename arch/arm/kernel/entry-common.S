@@ -86,7 +86,7 @@ ENTRY(ret_from_fork)
 ENDPROC(ret_from_fork)
 
 	.equ NR_syscalls,0
-#define CALL(x) .equ NR_syscalls,NR_syscalls+1
+#define CALL(x) .equ NR_syscalls,NR_syscalls+1  // 每调用一次 CALL， NR_syscalls++. 统计系统调用个数
 #include "calls.S"
 #undef CALL
 #define CALL(x) .long x
@@ -169,8 +169,8 @@ ftrace_stub:
  *-----------------------------------------------------------------------------
  */
 
-	/* If we're optimising for StrongARM the resulting code won't 
-	   run on an ARM7 and we can save a couple of instructions.  
+	/* If we're optimising for StrongARM the resulting code won't
+	   run on an ARM7 and we can save a couple of instructions.
 								--pb */
 #ifdef CONFIG_CPU_ARM710
 #define A710(code...) code
@@ -286,7 +286,7 @@ ENTRY(vector_swi)
 2:	mov	why, #0				@ no longer a real syscall
 	cmp	scno, #(__ARM_NR_BASE - __NR_SYSCALL_BASE)
 	eor	r0, scno, #__NR_SYSCALL_BASE	@ put OS number back
-	bcs	arm_syscall	
+	bcs	arm_syscall
 	b	sys_ni_syscall			@ not private func
 ENDPROC(vector_swi)
 
@@ -349,14 +349,14 @@ ENTRY(sys_call_table)
 sys_syscall:
 		bic	scno, r0, #__NR_OABI_SYSCALL_BASE
 		cmp	scno, #__NR_syscall - __NR_SYSCALL_BASE
-		cmpne	scno, #NR_syscalls	@ check range
+		cmpne	scno, #NR_syscalls	@ check range   // 检查系统调用号是否越界 下面后缀 lo 表示无符号小于
 		stmloia	sp, {r5, r6}		@ shuffle args
 		movlo	r0, r1
 		movlo	r1, r2
 		movlo	r2, r3
 		movlo	r3, r4
-		ldrlo	pc, [tbl, scno, lsl #2]
-		b	sys_ni_syscall
+		ldrlo	pc, [tbl, scno, lsl #2]   // pc = 系统调用表基址 + 系统调用号 << 2 （上面 NR_syscalls 保证了 4 字节对齐）
+		b	sys_ni_syscall   // 上条 lo 后缀指令不满足下，会调整到 sys_ni_syscall
 ENDPROC(sys_syscall)
 
 sys_fork_wrapper:

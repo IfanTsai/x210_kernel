@@ -534,6 +534,9 @@ __tagtable(ATAG_CORE, parse_tag_core);
 
 static int __init parse_tag_mem32(const struct tag *tag)
 {
+    // bank1: tag->u.mem.start = 0x30000000, tag->u.mem.size = 0x10000000 = 256 MB   (VA)
+    // bank2: tag->u.mem.start = 0x40000000, tag->u.mem.size = 0x10000000 = 256 MB
+    // 通过 uboot 传过来的 tag 设置 meminfo 全局变量
 	return arm_add_memory(tag->u.mem.start, tag->u.mem.size);
 }
 

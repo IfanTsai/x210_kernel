@@ -1052,7 +1052,7 @@ __kuser_helper_end:
  * SP points to a minimal amount of processor-private memory, the address
  * of which is copied into r0 for the mode specific abort handler.
  */
-	.macro	vector_stub, name, mode, correction=0
+	.macro	vector_stub, name, mode, correction=0   // 宏定义开始
 	.align	5
 
 vector_\name:
@@ -1083,20 +1083,20 @@ vector_\name:
  THUMB(	ldr	lr, [r0, lr, lsl #2]	)
 	mov	r0, sp
  ARM(	ldr	lr, [pc, lr, lsl #2]	)
-	movs	pc, lr			@ branch to handler in SVC mode
+	movs	pc, lr			@ branch to handler in SVC mode // 根据进入中断前的工作模式(spsr)来跳转下面 _irq_xxx
 ENDPROC(vector_\name)
 
 	.align	2
 	@ handler addresses follow this label
 1:
-	.endm
+	.endm  // 宏定义结束
 
 	.globl	__stubs_start
 __stubs_start:
 /*
  * Interrupt dispatcher
  */
-	vector_stub	irq, IRQ_MODE, 4
+	vector_stub	irq, IRQ_MODE, 4     // 宏展开，定义 vector_irq
 
 	.long	__irq_usr			@  0  (USR_26 / USR_32)
 	.long	__irq_invalid			@  1  (FIQ_26 / FIQ_32)
@@ -1229,13 +1229,13 @@ __vectors_start:
  ARM(	swi	SYS_ERROR0	)
  THUMB(	svc	#0		)
  THUMB(	nop			)
-	W(b)	vector_und + stubs_offset
-	W(ldr)	pc, .LCvswi + stubs_offset
-	W(b)	vector_pabt + stubs_offset
-	W(b)	vector_dabt + stubs_offset
-	W(b)	vector_addrexcptn + stubs_offset
-	W(b)	vector_irq + stubs_offset
-	W(b)	vector_fiq + stubs_offset
+	W(b)	vector_und  + stubs_offset        // 0x00 Reset
+	W(ldr)	pc, .LCvswi + stubs_offset        // 0x04 Undefined Instruction
+	W(b)	vector_pabt + stubs_offset        // 0x08 Software Interrupt
+	W(b)	vector_dabt + stubs_offset        // 0x0c Data Abort
+	W(b)	vector_addrexcptn + stubs_offset  // 0x10 Reserved
+	W(b)	vector_irq + stubs_offset         // 0x14 IRQ
+	W(b)	vector_fiq + stubs_offset         // 0x18 FIQ
 
 	.globl	__vectors_end
 __vectors_end:
