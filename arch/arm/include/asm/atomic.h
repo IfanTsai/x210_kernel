@@ -34,23 +34,39 @@
 /*
  * ARMv6 UP and SMP safe atomic ops.  We use load exclusive and
  * store exclusive to ensure that these are atomic.  We may loop
- * to ensure that the update happens.                              
+ * to ensure that the update happens.
  */
 // 加一个整数到原子变量
+/*
+ * 内嵌汇编格式：
+ *         __asm__ volatile (instruction：output: input: changed)
+ * "=&r": = 只写, & 仅用作输出, r 使用任何可用的寄存器
+ * "+Qo": + 可读可写,
+ * changed 部分：告诉 gcc 该内嵌汇编改变了一些值，强迫 gcc 在编译这段内嵌汇编之前保存会被修改的值，在执行完后恢复
+ *
+ * ldrex rx, [ry]  @ 将寄存器 ry 指向的内存值 load 到寄存器 rx 中， 并记录 ry 指向的内存状态为 exclusive
+ * strex rx, ry, [rz]
+ * @ 更新内存时，会检查内存 exclusive 状态.
+ * @ 将寄存器 ry 的值 store 到 rz 指向的内存，如果指向的内存为 exclusive, 则执行成功，否则失败。
+ * @ 成功则寄存器 rx 被设置为 0, 否则设置为 1。执行成功后清除 exclusive 标记
+ *
+ * arm 的 exclusive 标记是通过 exclusive monitor 模块实现的，
+ * 在老的 x86 架构下实现类似 ldrex/strex 功能可以通过锁总线实现
+ */
 static inline void atomic_add(int i, atomic_t *v)
 {
 	unsigned long tmp;
 	int result;
 
-	__asm__ __volatile__("@ atomic_add\n"
-"1:	ldrex	%0, [%3]\n"
-"	add	%0, %0, %4\n"
-"	strex	%1, %0, [%3]\n"
-"	teq	%1, #0\n"
-"	bne	1b"
+	__asm__ __volatile__("@ atomic_add\n"  // @ 为注释
+"1:	ldrex	%0, [%3]\n"         // 把 v->counter 内存值 load 到 result 中   (v->counter 内存会被记录为 exclusive)
+"	add	%0, %0, %4\n"           // result += i
+"	strex	%1, %0, [%3]\n"     // 把 result 的值 store 到 v->counter 的内存，并把 store 成功与否存入 tmp
+"	teq	%1, #0\n"               // tmp 为 0 表示成功
+"	bne	1b"                     // 如果不为 0， 则重新执行一遍
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)
 	: "r" (&v->counter), "Ir" (i)
-	: "cc");
+	: "cc");   // condition register, 状态寄存器标志位
 }
 
 static inline int atomic_add_return(int i, atomic_t *v)
@@ -114,22 +130,23 @@ static inline int atomic_sub_return(int i, atomic_t *v)
 	return result;
 }
 
+// CAS   compare and swap
 static inline int atomic_cmpxchg(atomic_t *ptr, int old, int new)
 {
 	unsigned long oldval, res;
 
-	smp_mb();
+	smp_mb();   // 内存屏障
 
 	do {
 		__asm__ __volatile__("@ atomic_cmpxchg\n"
-		"ldrex	%1, [%3]\n"
-		"mov	%0, #0\n"
-		"teq	%1, %4\n"
-		"strexeq %0, %5, [%3]\n"
+		"ldrex	%1, [%3]\n"         // 把 ptr->counter 值 load 到 oldval 中 (ptr->counter 内存会被记录为 exclusive)
+		"mov	%0, #0\n"           // res = 0
+		"teq	%1, %4\n"           // 判断 oldval 是否等于 old ( if (     ptr->counter == old) )
+		"strexeq %0, %5, [%3]\n"    // 如果相等, 则将 new 值 store 到 ptr->counter 的内存, 并把 store 成功与否存入 res
 		    : "=&r" (res), "=&r" (oldval), "+Qo" (ptr->counter)
 		    : "r" (&ptr->counter), "Ir" (old), "r" (new)
 		    : "cc");
-	} while (res);
+	} while (res);  // strex 失败会将 res 置 1, 失败则再次执行 do while 循环
 
 	smp_mb();
 

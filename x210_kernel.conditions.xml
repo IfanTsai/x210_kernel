@@ -2002,6 +2002,7 @@
 			<define id="CONFIG_HAS_IOMEM" value="1" />
 			<define id="CONFIG_HAS_DMA" value="1" />
 			<define id="CONFIG_NLATTR" value="1" />
+			<define id="__LINUX_ARM_ARCH__" value="7" />
 		</Defines>
 	</ParseConditions>
 </SourceInsightParseConditions>
