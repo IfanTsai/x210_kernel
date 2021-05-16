@@ -193,7 +193,7 @@ wait_queue_head_t *bit_waitqueue(void *, int);
 
 #define __wait_event(wq, condition) 					\
 do {									\
-	/* 实例化一个等待队列中的节点，并获取当前进程pcb */ \
+	/* 实例化一个等待队列中的节点，并获取当前进程 pcb */ \
 	DEFINE_WAIT(__wait);						\
 									\
 	for (;;) {							\

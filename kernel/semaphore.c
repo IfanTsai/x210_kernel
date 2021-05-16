@@ -58,7 +58,7 @@ void down(struct semaphore *sem)
 	if (likely(sem->count > 0))
 		sem->count--;
 	else
-		__down(sem);
+		__down(sem);    // 注意   __down 会导致睡眠，所以在函数内部睡眠前会临时释放 spinlock
 	spin_unlock_irqrestore(&sem->lock, flags);
 }
 EXPORT_SYMBOL(down);
@@ -79,9 +79,9 @@ int down_interruptible(struct semaphore *sem)
 
 	spin_lock_irqsave(&sem->lock, flags);
 	if (likely(sem->count > 0))
-		sem->count--;
+		sem->count--;     // 获取 semaphore 成功
 	else
-		result = __down_interruptible(sem);
+		result = __down_interruptible(sem);    // 获取   semaphore 失败
 	spin_unlock_irqrestore(&sem->lock, flags);
 
 	return result;
@@ -181,9 +181,9 @@ void up(struct semaphore *sem)
 
 	spin_lock_irqsave(&sem->lock, flags);
 	if (likely(list_empty(&sem->wait_list)))
-		sem->count++;
+		sem->count++;    // 没有进程在等待本 semaphore， 则直接将 count +1
 	else
-		__up(sem);
+		__up(sem);      // 否则需要唤醒正在等待本 semaphore 的进程
 	spin_unlock_irqrestore(&sem->lock, flags);
 }
 EXPORT_SYMBOL(up);
@@ -205,9 +205,9 @@ static inline int __sched __down_common(struct semaphore *sem, long state,
 								long timeout)
 {
 	struct task_struct *task = current;
-	struct semaphore_waiter waiter;
+	struct semaphore_waiter waiter;    // 用于描述每个获取 semaphore 失败的进程
 
-	list_add_tail(&waiter.list, &sem->wait_list);
+	list_add_tail(&waiter.list, &sem->wait_list);   // add 到 semaphore 管理的睡眠进程链表中
 	waiter.task = task;
 	waiter.up = 0;
 
@@ -216,11 +216,11 @@ static inline int __sched __down_common(struct semaphore *sem, long state,
 			goto interrupted;
 		if (timeout <= 0)
 			goto timed_out;
-		__set_task_state(task, state);
-		spin_unlock_irq(&sem->lock);
-		timeout = schedule_timeout(timeout);
+		__set_task_state(task, state);     // 设置当前进程状态（TASK_UNINTERRUPTIBLE，TASK_INTERRUPTIBLE）
+		spin_unlock_irq(&sem->lock);       // 接下去要 schedule 了, 所以临时释放 spinlock
+		timeout = schedule_timeout(timeout);     // 主动让出 cpu
 		spin_lock_irq(&sem->lock);
-		if (waiter.up)
+		if (waiter.up)  // 如果被 up   操作唤醒则直接返回 0 表示成功获取了锁进入了临界区， 否则被其他操作(signal,timeout)唤醒则再度循环后通过 goto 跳出循环
 			return 0;
 	}
 
@@ -256,8 +256,8 @@ static noinline int __sched __down_timeout(struct semaphore *sem, long jiffies)
 static noinline void __sched __up(struct semaphore *sem)
 {
 	struct semaphore_waiter *waiter = list_first_entry(&sem->wait_list,
-						struct semaphore_waiter, list);
+						struct semaphore_waiter, list);   // 睡眠时是 list_add_tail, 所以取队头，采用先进先出策略
 	list_del(&waiter->list);
-	waiter->up = 1;
-	wake_up_process(waiter->task);
+	waiter->up = 1;          // 标记被 up 唤醒了, 在 down 中判断该标记为 1 则直接返回 0 表示获取了 semaphore 进入了临界区
+	wake_up_process(waiter->task);   // 唤醒进程
 }

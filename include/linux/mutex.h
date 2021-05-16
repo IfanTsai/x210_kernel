@@ -48,8 +48,8 @@
 struct mutex {
 	/* 1: unlocked, 0: locked, negative: locked, possible waiters */
 	atomic_t		count;
-	spinlock_t		wait_lock;
-	struct list_head	wait_list;
+	spinlock_t		wait_lock;      // spinlock, 保护 wait_list
+	struct list_head	wait_list; // 用于管理所有在该 mutex 上睡眠的进程，没有成功获取锁的进程都会睡眠在该链表上
 #if defined(CONFIG_DEBUG_MUTEXES) || defined(CONFIG_SMP)
 	struct thread_info	*owner;
 #endif

@@ -14,9 +14,9 @@
 
 /* Please don't access any members of this structure directly */
 struct semaphore {
-	spinlock_t		lock;
-	unsigned int		count;
-	struct list_head	wait_list;
+	spinlock_t		lock;           // spinlock 用于保护    count 和 wait_list
+	unsigned int		count;      // 能进入临界区的进程个数
+	struct list_head	wait_list; // 用于管理所有在该 semaphore 上睡眠的进程，没有成功获取锁的进程都会睡眠在该链表上
 };
 
 #define __SEMAPHORE_INITIALIZER(name, n)				\

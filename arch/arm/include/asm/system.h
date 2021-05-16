@@ -116,8 +116,11 @@ extern unsigned int user_debug;
 #endif
 
 #if __LINUX_ARM_ARCH__ >= 7
+// 指令同步屏障      instruction synchronization barrier  冲洗流水线和预取队列后，才会从 cache 或内存中取 isb 之后的指令。通常用于上下文切换
 #define isb() __asm__ __volatile__ ("isb" : : : "memory")
+// 数据同步屏障  data synchronization barrier  任何指令都要等 dsb 前的存储（包括缓存）访问完成
 #define dsb() __asm__ __volatile__ ("dsb" : : : "memory")
+// 数据存储屏障  data memory barrier  任何指令都要等 dmb 前的内存访问完成
 #define dmb() __asm__ __volatile__ ("dmb" : : : "memory")
 #elif defined(CONFIG_CPU_XSC3) || __LINUX_ARM_ARCH__ == 6
 #define isb() __asm__ __volatile__ ("mcr p15, 0, %0, c7, c5, 4" \
@@ -142,9 +145,9 @@ extern unsigned int user_debug;
 #ifdef CONFIG_ARCH_HAS_BARRIERS
 #include <mach/barriers.h>
 #elif defined(CONFIG_ARM_DMA_MEM_BUFFERABLE) || defined(CONFIG_SMP)
-#define mb()		do { dsb(); outer_sync(); } while (0)
-#define rmb()		dmb()
-#define wmb()		mb()
+#define mb()		do { dsb(); outer_sync(); } while (0)        // 内存屏障（包括读写）
+#define rmb()		dmb()                                        // 读内存屏障
+#define wmb()		mb()                                         // 写内存屏障
 #else
 #define mb()	do { if (arch_is_coherent()) dmb(); else barrier(); } while (0)
 #define rmb()	do { if (arch_is_coherent()) dmb(); else barrier(); } while (0)
@@ -156,12 +159,12 @@ extern unsigned int user_debug;
 #define smp_rmb()	barrier()
 #define smp_wmb()	barrier()
 #else
-#define smp_mb()	dmb()
-#define smp_rmb()	dmb()
-#define smp_wmb()	dmb()
+#define smp_mb()	dmb()  // smp 场合下的内存屏障
+#define smp_rmb()	dmb()  // smp 场合下的读内存屏障
+#define smp_wmb()	dmb()  // smp 场合下的写内存屏障
 #endif
 
-#define read_barrier_depends()		do { } while(0)
+#define read_barrier_depends()		do { } while(0)   // 读依赖屏障
 #define smp_read_barrier_depends()	do { } while(0)
 
 #define set_mb(var, value)	do { var = value; smp_mb(); } while (0)

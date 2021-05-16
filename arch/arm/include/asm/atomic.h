@@ -53,6 +53,13 @@
  * arm 的 exclusive 标记是通过 exclusive monitor 模块实现的，
  * 在老的 x86 架构下实现类似 ldrex/strex 功能可以通过锁总线实现
  */
+ /*
+  * 1. CPU1 发起 ldrex 读操作, 记录当前状态为 exclusive
+  * 2. CPU2 发起 ldrex 读操作, 记录当前状态为 exclusive, 状态保持不变
+  * 3. CPU2 发起 strex 写操作, 状态从 exclusive 变为 open, 同时数据写回内存
+  * 4. CPU1 发起 strex 写操作, 由于当前状态为 open, 则写失败
+  * 5. CPU1 由于 strex 写失败, 根据 atomic_add 逻辑会再进行 ldrex 后 strex 直到成功(这就是所谓的自旋), 所以保证了每一个++都不会丢失
+  */
 static inline void atomic_add(int i, atomic_t *v)
 {
 	unsigned long tmp;

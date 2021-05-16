@@ -137,11 +137,22 @@ static inline void __raw_spin_lock_bh(raw_spinlock_t *lock)
 	LOCK_CONTENDED(lock, do_raw_spin_trylock, do_raw_spin_lock);
 }
 
+/*
+ * 关闭抢占原因： （注意即使不关闭抢占也不会死锁）
+ *  考虑单核，假设进程１ 正在持有该锁，此时发生了 schedule 后进程2 去试图拿该锁，进程2 就会自旋导致时间浪费。
+ *  所以合理做法是让进程1 尽快释放该锁。
+ *
+ * spinlock 临界区不允许 sleep 原因：
+ *  假设进程1 持有该锁进入临界区，此时该 cpu 已经关闭抢占了,
+ *  如果此时调用了 sleep 主动 schedule 出去后，该 cpu 就永远回不了因为抢占被关闭了。（除非其他进程主动 schedule 回来）
+ *  此时，如果恰好进程2 再试图获取该锁时就会发生死锁。
+ *  （真实情况，schedule 函数会检查，如果已经关闭抢占了，则直接 panic)
+ */
 static inline void __raw_spin_lock(raw_spinlock_t *lock)
 {
-	preempt_disable();
-	spin_acquire(&lock->dep_map, 0, 0, _RET_IP_);
-	LOCK_CONTENDED(lock, do_raw_spin_trylock, do_raw_spin_lock);
+	preempt_disable();   // 关闭抢占
+	spin_acquire(&lock->dep_map, 0, 0, _RET_IP_);   // 空函数
+	LOCK_CONTENDED(lock, do_raw_spin_trylock, do_raw_spin_lock);       // 宏展开后， do_raw_spin_lock(lock)
 }
 
 #endif /* CONFIG_PREEMPT */

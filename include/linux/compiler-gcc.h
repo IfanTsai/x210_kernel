@@ -9,7 +9,7 @@
 
 /* Optimization barrier */
 /* The "volatile" is due to gcc bugs */
-#define barrier() __asm__ __volatile__("": : :"memory")
+#define barrier() __asm__ __volatile__("": : :"memory")     // 编译优化屏障，阻止 gcc 为了性能优化而进行指令重排
 
 /*
  * This macro obfuscates arithmetic on a variable address so that gcc

@@ -44,14 +44,14 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 	unsigned long tmp;
 
 	__asm__ __volatile__(
-"1:	ldrex	%0, [%1]\n"
-"	teq	%0, #0\n"
+"1:	ldrex	%0, [%1]\n"    // 将 lock->lock 内存值 load 到 tmp 中 (并标记内存为 exclusive)
+"	teq	%0, #0\n"          // 测试 tmp 是否为 0
 #ifdef CONFIG_CPU_32v6K
-"	wfene\n"
+"	wfene\n"     // 如果 tmp 不为 0, 进入低功耗睡眠模式，避免 CPU 进入 busy loop 的悲惨境地
 #endif
-"	strexeq	%0, %2, [%1]\n"
-"	teqeq	%0, #0\n"
-"	bne	1b"
+"	strexeq	%0, %2, [%1]\n"   // tmp 如果为 0, 则将 1 stroe 到 lock->lock， 将成功与否存入 tmp
+"	teqeq	%0, #0\n"         // 测试 tmp 是否为 0
+"	bne	1b"                   // 如果 tmp 不为 0, 则重新执行这段逻辑
 	: "=&r" (tmp)
 	: "r" (&lock->lock), "r" (1)
 	: "cc");
@@ -84,12 +84,12 @@ static inline void arch_spin_unlock(arch_spinlock_t *lock)
 	smp_mb();
 
 	__asm__ __volatile__(
-"	str	%1, [%0]\n"
+"	str	%1, [%0]\n"　　　　// lock->lock = 1
 	:
 	: "r" (&lock->lock), "r" (0)
 	: "cc");
 
-	dsb_sev();
+	dsb_sev();   // 出了内存屏障外， sev 指令会唤醒通过             wfe 指令进入睡眠的 CPU
 }
 
 /*
