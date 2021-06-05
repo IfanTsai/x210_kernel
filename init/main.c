@@ -437,9 +437,9 @@ static noinline void __init_refok rest_init(void)
 	 * the init task will end up wanting to create kthreads, which, if
 	 * we schedule it before we create kthreadd, will OOPS.
 	 */
-	kernel_thread(kernel_init, NULL, CLONE_FS | CLONE_SIGHAND);
+	kernel_thread(kernel_init, NULL, CLONE_FS | CLONE_SIGHAND);    // 挂载 rootfs ---> 启动 rootfs 中的 init 进程
 	numa_default_policy();
-	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
+	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);   // kthreadd
 	rcu_read_lock();
 	kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
 	rcu_read_unlock();
@@ -456,7 +456,7 @@ static noinline void __init_refok rest_init(void)
 	preempt_disable();
 
 	/* Call into cpu_idle with preempt disabled */
-	cpu_idle();
+	cpu_idle();       // idle 进程
 }
 
 /* Check for early params. */
@@ -850,7 +850,7 @@ static noinline int init_post(void)
 	 * trying to recover a really broken machine.
 	 */
 	if (execute_command) {
-		run_init_process(execute_command);
+		run_init_process(execute_command);     // 启动从 bootargs 传过来的 init 进程路径
 		printk(KERN_WARNING "Failed to execute %s.  Attempting "
 					"defaults...\n", execute_command);
 	}
@@ -902,11 +902,11 @@ static int __init kernel_init(void * unused)
 	do_basic_setup();
 
 	/* Open the /dev/console on the rootfs, this should never fail */
-	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
+	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)        // fd = 0, 标准输出
 		printk(KERN_WARNING "Warning: unable to open an initial console.\n");
 
-	(void) sys_dup(0);
-	(void) sys_dup(0);
+	(void) sys_dup(0);   // fd = 1, 标准输入
+	(void) sys_dup(0);   // fd = 2, 标准错误
 	/*
 	 * check if there is an early userspace init.  If yes, let it do all
 	 * the work
@@ -917,7 +917,7 @@ static int __init kernel_init(void * unused)
 
 	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
-		prepare_namespace();
+		prepare_namespace();                // 挂载 rootfs
 	}
 
 	/*
@@ -926,6 +926,6 @@ static int __init kernel_init(void * unused)
 	 * initmem segments and start the user-mode stuff..
 	 */
 
-	init_post();
+	init_post();   // 启动 init 进程
 	return 0;
 }

@@ -244,7 +244,7 @@ void __init mount_block_root(char *name, int flags)
 	get_fs_names(fs_names);
 retry:
 	for (p = fs_names; *p; p += strlen(p)+1) {
-		int err = do_mount_root(name, p, flags, root_mount_data);
+		int err = do_mount_root(name, p, flags, root_mount_data);  // err = 0 表示挂载 rootfs 成功
 		switch (err) {
 			case 0:
 				goto out;
@@ -388,7 +388,7 @@ void __init prepare_namespace(void)
 		root_device_name = saved_root_name;
 		if (!strncmp(root_device_name, "mtd", 3) ||
 		    !strncmp(root_device_name, "ubi", 3)) {
-			mount_block_root(root_device_name, root_mountflags);
+			mount_block_root(root_device_name, root_mountflags);        // 挂载 rootfs
 			goto out;
 		}
 		ROOT_DEV = name_to_dev_t(root_device_name);
