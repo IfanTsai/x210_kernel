@@ -2110,7 +2110,7 @@ static void __init smdkc110_machine_init(void)
 	arm_pm_restart = smdkc110_pm_restart;
 
 	s3c_usb_set_serial();
-	platform_add_devices(smdkc110_devices, ARRAY_SIZE(smdkc110_devices));
+	platform_add_devices(smdkc110_devices, ARRAY_SIZE(smdkc110_devices));     // dm9000 注册位于此 
 #ifdef CONFIG_ANDROID_PMEM
 	platform_device_register(&pmem_gpu1_device);
 #endif

@@ -927,7 +927,7 @@ static void dm9000_tx_done(struct net_device *dev, board_info_t *db)
 			/* One packet sent complete */
 			db->tx_pkt_cnt = 0;
 			dev->trans_start = 0;
-			netif_wake_queue(dev);  /* 唤醒数据传输队列，协议接口层可以继续向下递交数据了 */
+			netif_wake_queue(dev);  /* 唤醒发送队列，协议接口层可以继续向下递交数据了 */
 		}
 	}
 }
@@ -943,7 +943,7 @@ struct dm9000_rxhdr {
  * 2. 读取头部并放到 struct dm9000_rxhdr rxhdr 中，判断是否是正常的封包
  * 3. 读取data
  * 4. 分配 sk_buf， 并把data数据复制到sk_buf中
- * 5. 调用 netif_rx， 将sk_buffer向上递交给协议接口层
+ * 5. 调用 netif_rx， 将skb buffer 向上递交给协议接口层
  */
 /*
  *  Received a packet and pass to upper layer
@@ -952,7 +952,7 @@ static void
 dm9000_rx(struct net_device *dev)
 {
 	board_info_t *db = netdev_priv(dev);
-	struct dm9000_rxhdr rxhdr;   /* RX sram存储的数据的四字节头部, 去除头部后才是数据包 */
+	struct dm9000_rxhdr rxhdr;   /* RX SRAM 存储的数据的四字节头部, 去除头部后才是数据包 */
 	struct sk_buff *skb;
 	u8 rxbyte, *rdptr;
 	bool GoodPacket;
@@ -964,9 +964,9 @@ dm9000_rx(struct net_device *dev)
 		ior(db, DM9000_MRCMDX);	/* Dummy read */
 		save_mrr = (ior(db, 0xf5) << 8) | ior(db, 0xf4);
 		/* Get most updated data */
-		rxbyte = ior(db, DM9000_MRCMDX); /* 读取 RX sram 的数据, 地址不会自增 */
+		rxbyte = ior(db, DM9000_MRCMDX); /* 读取 RX SRAM 的数据, 地址不会自增 */
 		
-		if(rxbyte != DM9000_PKT_RDY)  /* RX sram存储的数据的四字节头部第一字节固定为0x01 */
+		if(rxbyte != DM9000_PKT_RDY)  /* DM9000_PKT_RDY: 0x01, RX sram存储的数据的四字节头部第一字节固定为 0x01 */
 		{
 			/* Status check: this byte must be 0 or 1 */
 			if (rxbyte > DM9000_PKT_RDY) {
@@ -983,10 +983,10 @@ dm9000_rx(struct net_device *dev)
 
 		/* A packet ready now  & Get status/length */
 		GoodPacket = true;
-		writeb(DM9000_MRCMD, db->io_addr);  /* 读取 RX sram 的数据, 并且地址自增 */
+		writeb(DM9000_MRCMD, db->io_addr);  /* 读取 RX SRAM 的数据, 并且地址自增 */
 		(db->inblk)(db->io_data, &rxhdr, sizeof(rxhdr));
 
-		RxLen = le16_to_cpu(rxhdr.RxLen);
+		RxLen = le16_to_cpu(rxhdr.RxLen);  // 数据包的总长度
 		
 		calc_mrr = save_mrr + 4 + RxLen;
 		if(0x00 == db->io_mode)  //16 bit only
@@ -1011,6 +1011,7 @@ dm9000_rx(struct net_device *dev)
 			dev_dbg(db->dev, "RST: RX Len:%x\n", RxLen);
 		}
 
+        // 校验头部的状态值，判断是否是一个正常的数据包
 		/* rxhdr.RxStatus is identical to RSR register. */
 		if (rxhdr.RxStatus & (RSR_FOE | RSR_CE | RSR_AE |
 				      RSR_PLE | RSR_RWTO |
@@ -1036,19 +1037,19 @@ dm9000_rx(struct net_device *dev)
 
 		/* Move data from DM9000 */
 		if (GoodPacket &&
-		    ((skb = dev_alloc_skb(RxLen + 4)) != NULL)) {
+		    ((skb = dev_alloc_skb(RxLen + 4)) != NULL)) {   // 如果是正常数据包，就申请 skb buffer
 			skb_reserve(skb, 2);
 			rdptr = (u8 *) skb_put(skb, RxLen - 4);
 
 			/* Read received packet from RX SRAM */
 
-			(db->inblk)(db->io_data, rdptr, RxLen);
+			(db->inblk)(db->io_data, rdptr, RxLen);  // 将 RX SRAM 中的有效数据拷贝到 skb buffer 中
 			dev->stats.rx_bytes += RxLen;
 
 			/* Pass to upper layer */
 			skb->protocol = eth_type_trans(skb, dev);
 
-			netif_rx(skb);           /* 将sk_buffer向上递交给协议接口层 */
+			netif_rx(skb);           /* 将 skb buffer 向上递交给协议接口层 */
 			dev->stats.rx_packets++;
 			
 			check_mrr = (ior(db, 0xf5) << 8) | ior(db, 0xf4);
@@ -1096,21 +1097,21 @@ static irqreturn_t dm9000_interrupt(int irq, void *dev_id)
 	iow(db, DM9000_IMR, IMR_PAR);
 
 	/* Got DM9000 interrupt status */
-	int_status = ior(db, DM9000_ISR);	/* Got ISR */  /* 获取中断状态, 是接收中断还是发送中断 */
+	int_status = ior(db, DM9000_ISR);	/* Got ISR */  /* DM9000_ISR: 0XFE, 获取中断状态, 是接收中断还是发送中断 */
 	iow(db, DM9000_ISR, int_status);	/* Clear ISR status */
 
 	if (netif_msg_intr(db))
 		dev_dbg(db->dev, "interrupt status %02x\n", int_status);
 
 	/* Received the coming packet */
-	if (int_status & ISR_PRS)   /* 接收中断 */
+	if (int_status & ISR_PRS)   /* ISR_PRS: 1 << 0, 接收中断 */
 		dm9000_rx(dev);
 
 	/* Got DM9000 interrupt status */
 	int_status |= ior(db, DM9000_ISR);	/* Got ISR */
 
 	/* Trnasmit Interrupt check */
-	if (int_status & ISR_PTS)   /* 发送中断 */
+	if (int_status & ISR_PTS)   /* ISR_PTS: 1 << 1, 发送中断 */
 	{
 		iow(db, DM9000_ISR, ISR_PTS);	/* Clear ISR status */
 		dm9000_tx_done(dev, db);
@@ -1202,7 +1203,7 @@ dm9000_open(struct net_device *dev)
 
 	irqflags |= IRQF_SHARED;
 
-	/* 注册收发中断 */
+	/* 申请收发中断 */
 	if (request_irq(dev->irq, dm9000_interrupt, irqflags, dev->name, dev))
 		return -EAGAIN;
 
@@ -1371,7 +1372,7 @@ dm9000_stop(struct net_device *ndev)
 static const struct net_device_ops dm9000_netdev_ops = {
 	.ndo_open		= dm9000_open,              /* ifconfig eth0 up */
 	.ndo_stop		= dm9000_stop,              /* ifconfig eth0 down */
-	.ndo_start_xmit		= dm9000_start_xmit,    /* 网络协议栈调用start_xmit */
+	.ndo_start_xmit		= dm9000_start_xmit,    /* 网络协议栈调用 start_xmit */
 	.ndo_tx_timeout		= dm9000_timeout,
 	.ndo_set_multicast_list	= dm9000_hash_table,
 	.ndo_do_ioctl		= dm9000_ioctl,
@@ -1473,7 +1474,11 @@ dm9000_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-	db->irq_wake = platform_get_irq(pdev, 1); /* 只定义了一个中断, 所以返回-ENXIO */
+    /*
+     * 第二个参数为 1 表示获取的是第二个中断资源。
+     * 由于只定义了一个中断, 所以返回 -ENXIO 
+     */
+	db->irq_wake = platform_get_irq(pdev, 1);
 	/* 这一段代码并不会执行 */
 	if (db->irq_wake >= 0) {
 		dev_dbg(db->dev, "wakeup irq %d\n", db->irq_wake);
@@ -1541,7 +1546,7 @@ dm9000_probe(struct platform_device *pdev)
 	ndev->irq	= db->irq_res->start;
 
 	/* ensure at least we have a default set of IO routines */
-	dm9000_set_io(db, iosize); /* 在下面if判断中还会设置一次, 所以这里设置无效 */
+	dm9000_set_io(db, iosize); /* 在下面 if 判断中还会设置一次, 所以这里设置无效 */
 
 	/* check to see if anything is being over-ridden */
 	if (pdata != NULL) {
@@ -1551,7 +1556,7 @@ dm9000_probe(struct platform_device *pdev)
 		if (pdata->flags & DM9000_PLATF_8BITONLY)
 			dm9000_set_io(db, 1);
 
-		if (pdata->flags & DM9000_PLATF_16BITONLY)  /* 只有这个if成立 */
+		if (pdata->flags & DM9000_PLATF_16BITONLY)  /* 只有这个 if 成立 */
 			dm9000_set_io(db, 2);  /* 设置 board_info 的读写函数 */
 
 		if (pdata->flags & DM9000_PLATF_32BITONLY)
@@ -1585,7 +1590,7 @@ dm9000_probe(struct platform_device *pdev)
 		id_val |= (u32)ior(db, DM9000_PIDL) << 16;  /* 读取 product id */
 		id_val |= (u32)ior(db, DM9000_PIDH) << 24;
 
-		if (id_val == DM9000_ID)   /* 验证是否是dm9000 */
+		if (id_val == DM9000_ID)   /* 验证是否是 DM9000 */
 			break;
 		dev_err(db->dev, "read wrong id 0x%08x\n", id_val);
 	}
@@ -1599,8 +1604,8 @@ dm9000_probe(struct platform_device *pdev)
 	/* Identify what type of DM9000 we are working on */
 
 	/* I/O mode */
-	db->io_mode = ior(db, DM9000_ISR) >> 6;	/* ISR bit7:6 keeps I/O mode */	
-	id_val = ior(db, DM9000_CHIPR);  /* 读取 chip revision */
+	db->io_mode = ior(db, DM9000_ISR) >> 6;	/* ISR bit7:6 keeps I/O mode */	  // DM9000_ISR: 0xFE, 读取 I/O mode
+	id_val = ior(db, DM9000_CHIPR);  /* DM9000_CHIPR: 0x2C, 读取 chip revision */
 	dev_dbg(db->dev, "dm9000 revision 0x%02x  , io_mode %02x \n", id_val, db->io_mode);
 
 	switch (id_val) {
@@ -1620,9 +1625,9 @@ dm9000_probe(struct platform_device *pdev)
 	/* driver system function */
 	ether_setup(ndev);
 
-	ndev->netdev_ops	= &dm9000_netdev_ops;
+	ndev->netdev_ops	= &dm9000_netdev_ops;            // net device 的 ops
 	ndev->watchdog_timeo	= msecs_to_jiffies(watchdog);
-	ndev->ethtool_ops	= &dm9000_ethtool_ops;
+	ndev->ethtool_ops	= &dm9000_ethtool_ops;          // ethtool 的 ops, 用于支持应用层的 ethtool 命令
 
 	db->msg_enable       = NETIF_MSG_LINK;
 	db->mii.phy_id_mask  = 0x1f;
