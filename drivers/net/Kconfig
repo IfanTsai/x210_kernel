@@ -965,6 +965,14 @@ config DM9000_16BIT
 	help
 	  Support DM9000 ethernet controller with 16bit data bus
 
+config DM9000_NAPI
+	bool "DM9000 NAPI"
+	depends on DM9000
+	default n
+	help
+	  Support DM9000 driver run NAPI mode
+
+
 config DM9000_DEBUGLEVEL
 	int "DM9000 maximum debug level"
 	depends on DM9000

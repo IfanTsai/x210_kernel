@@ -48,6 +48,8 @@
 
 /* Board/System/Debug information/definition ---------------- */
 
+#define DM9000_NAPI_WEIGHT 64
+
 #define DM9000_PHY		0x40	/* PHY address 0x01 */
 
 #define CARDNAME	"dm9000"
@@ -147,6 +149,9 @@ typedef struct board_info {
 	struct mii_if_info mii;
 	u32		msg_enable;
 	u32		wake_state;
+#ifdef CONFIG_DM9000_NAPI
+    struct napi_struct napi;
+#endif
 
 } board_info_t;
 
@@ -949,14 +954,18 @@ struct dm9000_rxhdr {
  *  Received a packet and pass to upper layer
  */
 static void
+#ifdef CONFIG_DM9000_NAPI
+dm9000_rx(struct net_device *dev, int budget)
+#else
 dm9000_rx(struct net_device *dev)
+#endif
 {
 	board_info_t *db = netdev_priv(dev);
 	struct dm9000_rxhdr rxhdr;   /* RX SRAM 存储的数据的四字节头部, 去除头部后才是数据包 */
 	struct sk_buff *skb;
 	u8 rxbyte, *rdptr;
 	bool GoodPacket;
-	int RxLen;
+	int RxLen, rxTime = 0;
 	int save_mrr, calc_mrr, check_mrr;
 
 	/* Check packet ready or not */
@@ -966,8 +975,7 @@ dm9000_rx(struct net_device *dev)
 		/* Get most updated data */
 		rxbyte = ior(db, DM9000_MRCMDX); /* 读取 RX SRAM 的数据, 地址不会自增 */
 		
-		if(rxbyte != DM9000_PKT_RDY)  /* DM9000_PKT_RDY: 0x01, RX sram存储的数据的四字节头部第一字节固定为 0x01 */
-		{
+		if(rxbyte != DM9000_PKT_RDY) { /* DM9000_PKT_RDY: 0x01, RX sram存储的数据的四字节头部第一字节固定为 0x01 */
 			/* Status check: this byte must be 0 or 1 */
 			if (rxbyte > DM9000_PKT_RDY) {
 				dev_warn(db->dev, "status check fail: %d\n", rxbyte);
@@ -1071,8 +1079,8 @@ dm9000_rx(struct net_device *dev)
 
 //			(db->dumpblk)(db->io_data, RxLen);
 		}
-		
-	} while (rxbyte & DM9000_PKT_RDY);
+		rxTime++;
+	} while ((rxbyte & DM9000_PKT_RDY) && rxTime < budget);
 }
 
 static irqreturn_t dm9000_interrupt(int irq, void *dev_id)
@@ -1104,8 +1112,13 @@ static irqreturn_t dm9000_interrupt(int irq, void *dev_id)
 		dev_dbg(db->dev, "interrupt status %02x\n", int_status);
 
 	/* Received the coming packet */
-	if (int_status & ISR_PRS)   /* ISR_PRS: 1 << 0, 接收中断 */
-		dm9000_rx(dev);
+    if (int_status & ISR_PRS) { /* ISR_PRS: 1 << 0, 接收中断 */
+#ifdef CONFIG_DM9000_NAPI
+        napi_schedule(&db->napi);
+#else
+        dm9000_rx(dev);
+#endif
+    }
 
 	/* Got DM9000 interrupt status */
 	int_status |= ior(db, DM9000_ISR);	/* Got ISR */
@@ -1218,6 +1231,10 @@ dm9000_open(struct net_device *dev)
 	netif_start_queue(dev);   /* 激活设备发送队列 */
 	
 	dm9000_schedule_poll(db);
+
+#ifdef CONFIG_DM9000_NAPI
+    napi_enable(&db->napi);
+#endif
 
 	return 0;
 }
@@ -1366,6 +1383,10 @@ dm9000_stop(struct net_device *ndev)
 
 	dm9000_shutdown(ndev);
 
+#ifdef CONFIG_DM9000_NAPI
+    napi_disable(&db->napi);
+#endif
+
 	return 0;
 }
 
@@ -1414,6 +1435,31 @@ static int __init mac_setup(char * str)
 	return 1;
 }
 __setup("mac=", mac_setup);
+
+#ifdef CONFIG_DM9000_NAPI
+static int dm9000_napi_poll(struct napi_struct *napi, int budget)
+{
+    board_info_t *db = container_of(napi, board_info_t, napi);
+    unsigned long flags;
+    u8 reg_save;
+
+    spin_lock_irqsave(&db->lock, flags);
+
+    reg_save = readb(db->io_addr);
+
+    dm9000_rx(db->ndev, budget);
+
+    napi_complete(napi);
+
+    iow(db, DM9000_IMR, db->imr_all);
+
+    writeb(reg_save, db->io_addr);
+
+    spin_unlock_irqrestore(&db->lock, flags);
+
+    return 0;
+}
+#endif
 
 /*
  * Search DM9000 board, allocate space and register it
@@ -1628,6 +1674,10 @@ dm9000_probe(struct platform_device *pdev)
 	ndev->netdev_ops	= &dm9000_netdev_ops;            // net device 的 ops
 	ndev->watchdog_timeo	= msecs_to_jiffies(watchdog);
 	ndev->ethtool_ops	= &dm9000_ethtool_ops;          // ethtool 的 ops, 用于支持应用层的 ethtool 命令
+
+#ifdef CONFIG_DM9000_NAPI
+    netif_napi_add(ndev, &db->napi, dm9000_napi_poll, DM9000_NAPI_WEIGHT);
+#endif
 
 	db->msg_enable       = NETIF_MSG_LINK;
 	db->mii.phy_id_mask  = 0x1f;
